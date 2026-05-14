@@ -75,6 +75,13 @@ class SmiNicSystem {
  private:
   std::string net_path_;
   std::string pci_path_;
+  /**
+   * One transport shared by every port this system discovers, instead of one
+   * backend per port. The netlink backend opens its socket eagerly on
+   * construction, so per-port ownership would hold N sockets for N ports;
+   * sharing holds one.
+   */
+  std::shared_ptr<amd::smi::nic::transport::NicTransport> transport_;
   std::vector<const SmiNic*> nics_;
   std::vector<std::unique_ptr<SmiNicSubsystem>> subsystems_;
 };

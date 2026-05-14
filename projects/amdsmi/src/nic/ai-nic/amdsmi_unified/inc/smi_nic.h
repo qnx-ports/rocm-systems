@@ -20,16 +20,17 @@
  * THE SOFTWARE.
  */
 
-#ifndef __SMI_NIC__H__
-#define __SMI_NIC__H__
+#ifndef AMDSMI_UNIFIED_SMI_NIC_H_
+#define AMDSMI_UNIFIED_SMI_NIC_H_
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "smi_ethtool_ioctl.h"
+#include "smi_nic_transport.h"
 
 enum class NicType {
   Unknown,
@@ -40,12 +41,16 @@ enum class NicType {
 
 enum class NicVendor { Unknown, AMD, Broadcom };
 
-// TODO: broadcom - update enum with the right products
 enum class NicProduct {
   Unknown,
   AINIC,  // AMD Pensando AINIC
-  Thor,   // Broadcom Thor
 };
+
+/**
+ * Board temperature sensors a NIC may expose. A vendor that lacks a given
+ * sensor reports it as unsupported (sentinel) rather than fabricating a value.
+ */
+enum class NicTempSensor : uint8_t { Asic, Transceiver, Board };
 
 class SmiInfiniBandPort {
  public:
@@ -92,7 +97,8 @@ class SmiInfiniBand {
 class SmiNicPort {
  public:
   SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path,
-             const std::string& sysfs_bus_path);
+             const std::string& sysfs_bus_path,
+             std::shared_ptr<amd::smi::nic::transport::NicTransport> transport = nullptr);
 
   const std::string& interface() const;
   const std::string& bdf() const;
@@ -101,7 +107,7 @@ class SmiNicPort {
 
   std::optional<std::string> mac_address() const;
   std::optional<uint32_t> port_num() const;
-  std::optional<uint8_t> ifindex() const;
+  std::optional<uint32_t> ifindex() const;
   std::optional<uint8_t> carrier() const;
   std::optional<uint16_t> mtu() const;
   std::optional<std::string> link_state() const;
@@ -110,18 +116,15 @@ class SmiNicPort {
   const std::string port_type() const;
   std::string flavour() const;
 
-  std::optional<uint32_t> active_fec() const;
-  std::optional<std::string> autoneg() const;
-  std::optional<std::string> pause_autoneg() const;
-  std::optional<std::string> pause_rx() const;
-  std::optional<std::string> pause_tx() const;
+  std::optional<bool> autoneg() const;
+  std::optional<amd::smi::nic::transport::PauseParams> pause_params() const;
+  std::optional<std::string> permanent_address() const;
 
   void discover_infiniband();
   void add_infiniband(const SmiInfiniBand& infiniband);
   const std::vector<SmiInfiniBand>& infiniband() const;
   uint8_t infiniband_num() const;
   void collect_vendor_statistics();
-  void add_vendor_statistic(struct ethtool_gstrings* strings, struct ethtool_stats* stats);
   const std::map<std::string, uint64_t>& get_vendor_stats_map() const;
   void collect_standard_statistics();
   const std::map<std::string, uint64_t>& get_standard_stats_map() const;
@@ -152,6 +155,7 @@ class SmiNicPort {
   std::vector<SmiInfiniBand> infiniband_;
   std::map<std::string, uint64_t> vendor_stats_map_;
   std::map<std::string, uint64_t> standard_stats_map_;
+  std::shared_ptr<amd::smi::nic::transport::NicTransport> transport_;
 };
 
 class SmiNic {
@@ -191,6 +195,16 @@ class SmiNic {
   virtual std::optional<std::string> part_number() const;
   virtual std::optional<std::string> serial_number() const;
 
+  /**
+   * Absolute path of the hwmon `tempN_input` file (millidegrees C) backing
+   * `sensor`, or nullopt if this NIC has no such sensor. The base performs
+   * generic hwmon discovery under the PCI device, which covers standard NIC
+   * drivers (e.g. bnxt_en) for the ASIC sensor; a vendor whose sensors live
+   * elsewhere overrides this. (Health reporters are enumerated over devlink and
+   * need no per-vendor mapping, so there is no reporter-name resolver here.)
+   */
+  virtual std::optional<std::string> hwmon_temp_path(NicTempSensor sensor) const;
+
  protected:
   std::string iface_;
   std::string bdf_;
@@ -214,16 +228,4 @@ class SmiNicPensando : public SmiNic {
   std::optional<std::string> serial_number() const override;
 };
 
-class SmiNicBroadcom : public SmiNic {
- public:
-  SmiNicBroadcom(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
-                 const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
-                 NicVendor vendor = NicVendor::Broadcom, NicProduct product = NicProduct::Thor);
-
-  std::optional<std::string> vendor_name() const override;
-  std::optional<std::string> product_name() const override;
-  std::optional<std::string> part_number() const override;
-  std::optional<std::string> serial_number() const override;
-};
-
-#endif  // __SMI_NIC_H__
+#endif  // AMDSMI_UNIFIED_SMI_NIC_H_

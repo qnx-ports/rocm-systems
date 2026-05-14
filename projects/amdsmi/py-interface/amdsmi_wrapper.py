@@ -362,8 +362,6 @@ amdsmi_processor_type_t__enumvalues = {
     5: 'AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE',
     6: 'AMDSMI_PROCESSOR_TYPE_AMD_APU',
     7: 'AMDSMI_PROCESSOR_TYPE_AMD_NIC',
-    8: 'AMDSMI_PROCESSOR_TYPE_BRCM_NIC',
-    9: 'AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH',
 }
 AMDSMI_PROCESSOR_TYPE_UNKNOWN = 0
 AMDSMI_PROCESSOR_TYPE_AMD_GPU = 1
@@ -373,8 +371,6 @@ AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU = 4
 AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE = 5
 AMDSMI_PROCESSOR_TYPE_AMD_APU = 6
 AMDSMI_PROCESSOR_TYPE_AMD_NIC = 7
-AMDSMI_PROCESSOR_TYPE_BRCM_NIC = 8
-AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH = 9
 amdsmi_processor_type_t = ctypes.c_uint32 # enum
 processor_type_t = amdsmi_processor_type_t
 processor_type_t__enumvalues = amdsmi_processor_type_t__enumvalues
@@ -3030,9 +3026,10 @@ struct_amdsmi_nic_port_t._fields_ = [
     ('type', ctypes.c_char * 256),
     ('flavour', ctypes.c_char * 256),
     ('netdev', ctypes.c_char * 256),
-    ('ifindex', ctypes.c_ubyte),
+    ('ifindex', ctypes.c_uint32),
     ('mac_address', ctypes.c_char * 256),
     ('carrier', ctypes.c_ubyte),
+    ('PADDING_0', ctypes.c_ubyte),
     ('mtu', ctypes.c_uint16),
     ('link_state', ctypes.c_char * 256),
     ('link_speed', ctypes.c_uint32),
@@ -3041,6 +3038,7 @@ struct_amdsmi_nic_port_t._fields_ = [
     ('pause_autoneg', ctypes.c_char * 256),
     ('pause_rx', ctypes.c_char * 256),
     ('pause_tx', ctypes.c_char * 256),
+    ('PADDING_1', ctypes.c_ubyte * 4),
 ]
 
 amdsmi_nic_port_t = struct_amdsmi_nic_port_t
@@ -5096,8 +5094,6 @@ __all__ = \
     'AMDSMI_PROCESSOR_TYPE_AMD_CPU',
     'AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE',
     'AMDSMI_PROCESSOR_TYPE_AMD_GPU', 'AMDSMI_PROCESSOR_TYPE_AMD_NIC',
-    'AMDSMI_PROCESSOR_TYPE_BRCM_NIC',
-    'AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH',
     'AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU',
     'AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU',
     'AMDSMI_PROCESSOR_TYPE_UNKNOWN', 'AMDSMI_PTL_DATA_FORMAT_BF16',

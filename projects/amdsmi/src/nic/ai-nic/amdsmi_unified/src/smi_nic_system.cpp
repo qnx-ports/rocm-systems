@@ -32,6 +32,7 @@
 
 #include "smi_nic_subsystem.h"
 #include "smi_sysfs.h"
+#include "vendor_registry.h"
 
 namespace fs = std::filesystem;
 
@@ -56,10 +57,14 @@ uint64_t parse_bdf(const std::string& bdf) {
   }
 }
 
-SmiNicSystem::SmiNicSystem() : net_path_("/sys/class/net"), pci_path_("/sys/bus/pci/devices") {
-  register_subsystem(std::make_unique<SmiNicSubsystemPensando>());
-  // TODO: broadcom
-  // register_subsystem(std::make_unique<SmiNicSubsystemBroadcom>());
+SmiNicSystem::SmiNicSystem()
+    : net_path_("/sys/class/net"),
+      pci_path_("/sys/bus/pci/devices"),
+      transport_(amd::smi::nic::transport::create_transport(
+          amd::smi::nic::transport::NicBackend_t::Auto)) {
+  for (auto& plugin : make_default_vendor_plugins()) {
+    register_subsystem(std::move(plugin));
+  }
 }
 
 void SmiNicSystem::register_subsystem(std::unique_ptr<SmiNicSubsystem> subsystem) {
@@ -114,7 +119,7 @@ void SmiNicSystem::discover_nics() {
 
   nics_.clear();
   for (auto& subsystem : subsystems_) {
-    subsystem->discover(pci_path_, net_path_);
+    subsystem->discover(pci_path_, net_path_, transport_);
     const auto& subsys_nics = subsystem->get_nics();
     for (const auto& nic : subsys_nics) {
       nics_.push_back(nic.get());

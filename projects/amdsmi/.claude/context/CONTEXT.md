@@ -25,7 +25,7 @@ Definition. Disambiguation if the word is overloaded (e.g. "device" → which of
 ### device
 
 Informal synonym for **any** `amdsmi_processor_handle` (amdsmi.h:294), regardless of
-processor type: GPU, CPU, CPU-core, APU, AMD NIC, Broadcom NIC, or Broadcom switch
+processor type: GPU, CPU, CPU-core, APU, or AMD NIC
 (`amdsmi_processor_type_t`, amdsmi.h:354). **Not** an API type — the word leaks in from
 ROCm-SMI's `rsmi_..._device_...` naming and the CLI's `--gpu` indexing. Broader than a
 GPU and broader than a socket (a socket can own multiple processor handles). When a

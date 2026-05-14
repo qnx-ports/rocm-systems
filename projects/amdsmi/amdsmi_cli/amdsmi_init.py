@@ -126,32 +126,13 @@ def check_amd_hsmp_driver():
     return False
 
 
-def check_amd_ionic_driver():
-    """Returns true if ionic is found in the list of initialized modules"""
-    status_file = Path("/sys/module/ionic/initstate")
-    if status_file.exists():
-        if status_file.read_text(encoding="ascii").strip() == "live":
-            return True
-    return False
-
-
-def check_brcm_nic_driver():
-    """Returns true if bnxt_en is found in the list of initialized modules"""
-    status_file = Path("/sys/module/bnxt_en/initstate")
-    try:
-        if status_file.exists():
-            if status_file.read_text(encoding="ascii").strip() == "live":
-                return True
-    except OSError:
-        return False
-    return False
-
-
 def amdsmi_cli_init():
     """Initializes AMDSMI Library for the CLI
 
-    Probes for the presence of the amdgpu, amd_hsmp/hsmp_acpi, ionic, and bnxt_en
-    drivers and initializes the AMD SMI library based on the live drivers found.
+    Probes for the presence of the amdgpu and amd_hsmp/hsmp_acpi drivers and
+    initializes the AMD SMI library based on the live drivers found. NIC init is
+    always requested; the library's discovery layer decides whether any NIC is
+    present, so no per-vendor NIC driver probe is done here.
 
     Return:
         init_flag: the flag used to initialize the AMD SMI library without error
@@ -177,12 +158,17 @@ def amdsmi_cli_init():
     elif check_amd_hsmp_driver():
         init_flag |= amdsmi_interface.AmdSmiInitFlags.INIT_AMD_CPUS
         logging.debug("hsmp driver's initstate is live")
-    if check_amd_ionic_driver():
-        logging.debug("ionic driver's initstate is live")
-        init_flag |= amdsmi_interface.AmdSmiInitFlags.INIT_AMD_NICS
-    if check_brcm_nic_driver():
-        logging.debug("bnxt_en driver's initstate is live")
-        init_flag |= amdsmi_interface.AmdSmiInitFlags.INIT_AMD_NICS
+    # NIC presence is decided by the library's discovery layer, not a per-vendor
+    # driver probe here: always request NIC init and let discovery enumerate
+    # whatever vendors are present (finding none is a harmless no-op). NIC is not
+    # a mandatory driver, so its absence must not fail init and its always-on
+    # request must not mask a host that has no GPU/CPU drivers.
+    mandatory_drivers_present = init_flag != 0
+    init_flag |= amdsmi_interface.AmdSmiInitFlags.INIT_AMD_NICS
+
+    if not mandatory_drivers_present:
+        logging.error("Drivers not loaded (amdgpu, amd_hsmp drivers not found in modules)")
+        sys.exit(-1)
 
     _INIT_TIMEOUT_SEC = 60
     init_result = {"exception": None}
@@ -209,18 +195,11 @@ def amdsmi_cli_init():
         (amdsmi_interface.AmdSmiLibraryException, amdsmi_interface.AmdSmiParameterException),
     ):
         e = init_result["exception"]
-        # parameter exception thrown if init_flag is 0, but err_code will be set to 0 in that case, so must check if init_flag is 0 too
-        if (
-            e.err_code
-            in (
-                amdsmi_interface.amdsmi_wrapper.AMDSMI_STATUS_NOT_INIT,
-                amdsmi_interface.amdsmi_wrapper.AMDSMI_STATUS_DRIVER_NOT_LOADED,
-            )
-            or init_flag == 0
+        if e.err_code in (
+            amdsmi_interface.amdsmi_wrapper.AMDSMI_STATUS_NOT_INIT,
+            amdsmi_interface.amdsmi_wrapper.AMDSMI_STATUS_DRIVER_NOT_LOADED,
         ):
-            logging.error(
-                "Drivers not loaded (amdgpu, amd_hsmp, ionic, bnxt_en drivers not found in modules)"
-            )
+            logging.error("Drivers not loaded (amdgpu, amd_hsmp drivers not found in modules)")
             sys.exit(-1)
         else:
             raise e

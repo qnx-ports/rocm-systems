@@ -334,9 +334,7 @@ typedef enum {
   AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, /**< AMD CPU-Core processor type, individual processing units
                                            within the CPU */
   AMDSMI_PROCESSOR_TYPE_AMD_APU,   //!< AMD Accelerated processor type, GPU and CPU on a single die
-  AMDSMI_PROCESSOR_TYPE_AMD_NIC,   //!< AMD Network Interface Card processor type
-  AMDSMI_PROCESSOR_TYPE_BRCM_NIC,  //!< Broadcom Network Interface Card type
-  AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH  //!< Broadcom Switch type
+  AMDSMI_PROCESSOR_TYPE_AMD_NIC  //!< AMD Network Interface Card processor type
 } amdsmi_processor_type_t;
 
 /**
@@ -2979,6 +2977,9 @@ typedef struct {
 /**
  * @brief NIC asic information
  *
+ * Integer fields are set to the maximum value of their type (0xFF / 0xFFFF)
+ * when the corresponding attribute is unavailable.
+ *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef struct {
@@ -2997,6 +2998,9 @@ typedef struct {
 /**
  * @brief NIC bus information
  *
+ * Integer fields are set to the maximum value of their type (0xFF / 0xFFFFFFFF)
+ * when the corresponding attribute is unavailable.
+ *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef struct {
@@ -3009,6 +3013,8 @@ typedef struct {
 
 /**
  * @brief NIC NUMA information
+ *
+ * @p node is set to 0xFF when the NUMA node is unavailable.
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
@@ -3040,6 +3046,10 @@ typedef struct {
 /**
  * @brief NIC port information
  *
+ * Integer fields are set to the maximum value of their type (0xFF / 0xFFFF /
+ * 0xFFFFFFFF) when the corresponding attribute is unavailable, except @p ifindex
+ * which is 0 when unavailable (a valid Linux ifindex starts at 1).
+ *
  * Active FEC Modes:
  * The active_fec field provides a bitmask representation of Active FEC (Active Forward Error
  * Correction) modes. The bitmask values are derived from the `ethtool_fecparam` structure,
@@ -3065,7 +3075,7 @@ typedef struct {
   char type[AMDSMI_MAX_STRING_LENGTH];
   char flavour[AMDSMI_MAX_STRING_LENGTH];
   char netdev[AMDSMI_MAX_STRING_LENGTH];
-  uint8_t ifindex;
+  uint32_t ifindex;
   char mac_address[AMDSMI_MAX_STRING_LENGTH];
   uint8_t carrier;
   uint16_t mtu;
@@ -3100,6 +3110,9 @@ typedef struct {
 
 /**
  * @brief NIC RDMA port information
+ *
+ * Integer fields are set to the maximum value of their type (0xFF / 0xFFFF)
+ * when the corresponding attribute is unavailable.
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */

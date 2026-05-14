@@ -1,10 +1,5 @@
 /*
- * Copyright (c) Broadcom Inc All Rights Reserved.
- *
- *  Developed by:
- *            Broadcom Inc
- *
- *            www.broadcom.com
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,21 +13,21 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
 
-#ifndef AMD_SMI_LSPCI_COMMANDS_H_
-#define AMD_SMI_LSPCI_COMMANDS_H_
+#include "vendor_registry.h"
 
-#include "amd_smi/amdsmi.h"
-#include "rocm_smi/rocm_smi_logger.h"
+#include "broadcom/broadcom_subsystem.h"
+#include "pensando/pensando_subsystem.h"
 
-amdsmi_status_t get_lspci_device_data(std::string bdf_str, std::string search_key,
-                                      std::string& version);
-amdsmi_status_t get_lspci_root_switch(amdsmi_bdf_t device_bdf, amdsmi_bdf_t* switchBdf);
-
-#endif  // AMD_SMI_LSPCI_COMMANDS_H_
+std::vector<std::unique_ptr<SmiNicSubsystem>> make_default_vendor_plugins() {
+  std::vector<std::unique_ptr<SmiNicSubsystem>> plugins;
+  plugins.push_back(std::make_unique<SmiNicSubsystemPensando>());
+  plugins.push_back(std::make_unique<SmiNicSubsystemBroadcom>());
+  return plugins;
+}
