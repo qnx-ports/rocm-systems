@@ -91,6 +91,12 @@ ncclResult_t ncclDdaFabricCommInit(ncclComm* comm) {
   }
 
   CUDACHECKGOTO(cudaMemcpy(peerDev, h_ptrs.data(), nRanks * sizeof(void*), cudaMemcpyHostToDevice), res, fail);
+   CUDACHECKGOTO(
+      cudaMemcpy(
+          comm->ddaPeerPtrsHost, h_ptrs.data(), nRanks * sizeof(void*),
+          cudaMemcpyHostToHost),
+      res, fail);
+ 
 
   {
     auto barrierPair =
