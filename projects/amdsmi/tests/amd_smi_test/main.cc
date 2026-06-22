@@ -62,6 +62,7 @@
 #include "functional/gpu/thermal/temp_read.h"
 #include "functional/gpu/xgmi/xgmi_read_write.h"
 #include "functional/ifoe/fabric/fabric_read.h"
+#include "functional/ifoe/fabric/fabric_write.h"
 #include "functional/ifoe/identity/ifoe_info_read.h"
 #include "functional/system/cross_process_serialization.h"
 #include "functional/system/hw_topology_read.h"
@@ -340,6 +341,13 @@ TEST(SystemFunctionalReadOnly, TestKfdAtforkRead) {
 
 TEST(IfoeFunctionalReadOnly, TestFabricRead) {
   TestFabricRead tst;
+  RunGenericTest(&tst);
+}
+
+TEST(IfoeFunctionalReadWrite, TestFabricWrite) {
+  if (std::getenv("AMDSMI_NON_PRIVILEGED")) GTEST_SKIP_("Skipped in non-privileged mode");
+  if (!amd::smi::is_sudo_user()) GTEST_SKIP_("Invalid permission - Must run as super user");
+  TestFabricWrite tst;
   RunGenericTest(&tst);
 }
 
