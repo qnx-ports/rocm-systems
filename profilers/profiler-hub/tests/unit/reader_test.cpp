@@ -68,6 +68,60 @@ is_timestamp_sorted(const profiler_hub::reader_types::scalar_event_list_t& v)
     return true;
 }
 
+// Assert get_track_stats agrees with a full get_interval_track slice: count ==
+// #rows, min_ts == MIN(start), max_ts == MAX(end). This is the core fidelity
+// contract — the cheap aggregate must match what an eager load would compute.
+void
+expect_stats_match_intervals(
+    const profiler_hub::reader_types::track_stats_t&         stats,
+    const profiler_hub::reader_types::interval_event_list_t& intervals)
+{
+    ASSERT_EQ(stats.count, intervals.size());
+    if(intervals.empty())
+    {
+        ASSERT_FALSE(stats.min_ts.has_value());
+        ASSERT_FALSE(stats.max_ts.has_value());
+        return;
+    }
+    auto min_start = intervals.front().start;
+    auto max_end   = intervals.front().end;
+    for(const auto& iv : intervals)
+    {
+        if(iv.start < min_start) min_start = iv.start;
+        if(iv.end > max_end) max_end = iv.end;
+    }
+    ASSERT_TRUE(stats.min_ts.has_value());
+    ASSERT_TRUE(stats.max_ts.has_value());
+    ASSERT_EQ(stats.min_ts.value(), min_start);
+    ASSERT_EQ(stats.max_ts.value(), max_end);
+}
+
+// Assert get_track_stats agrees with a full get_scalar_track slice: count ==
+// #samples, min_ts == MIN(timestamp), max_ts == MAX(timestamp).
+void
+expect_stats_match_scalars(const profiler_hub::reader_types::track_stats_t&       stats,
+                           const profiler_hub::reader_types::scalar_event_list_t& samples)
+{
+    ASSERT_EQ(stats.count, samples.size());
+    if(samples.empty())
+    {
+        ASSERT_FALSE(stats.min_ts.has_value());
+        ASSERT_FALSE(stats.max_ts.has_value());
+        return;
+    }
+    auto min_ts = samples.front().timestamp;
+    auto max_ts = samples.front().timestamp;
+    for(const auto& s : samples)
+    {
+        if(s.timestamp < min_ts) min_ts = s.timestamp;
+        if(s.timestamp > max_ts) max_ts = s.timestamp;
+    }
+    ASSERT_TRUE(stats.min_ts.has_value());
+    ASSERT_TRUE(stats.max_ts.has_value());
+    ASSERT_EQ(stats.min_ts.value(), min_ts);
+    ASSERT_EQ(stats.max_ts.value(), max_ts);
+}
+
 class reader_test : public ::testing::Test
 {
 protected:
@@ -899,6 +953,54 @@ TEST_F(reader_test, v3_get_flows_links_regions_to_gpu_events)
     }
 }
 
+TEST_F(reader_test, v3_get_track_stats_cpu_thread_matches_interval_slice)
+{
+    // The cpu_thread track carrying the 59 region events: stats must agree with the
+    // full get_interval_track slice (count 59, min start, max end) without loading it.
+    auto tracks = m_reader->get_all_tracks();
+    auto cpu_tracks =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_FALSE(cpu_tracks.empty());
+
+    bool checked = false;
+    for(const auto& t : cpu_tracks)
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        if(intervals.size() != 59) continue;
+        auto stats = m_reader->get_track_stats(t->id);
+        expect_stats_match_intervals(stats, intervals);
+        // Known absolute bounds: first region start (from the interval test above).
+        ASSERT_EQ(stats.count, 59U);
+        ASSERT_EQ(stats.min_ts.value(), 23040260707644U);
+        checked = true;
+        break;
+    }
+    ASSERT_TRUE(checked) << "no cpu_thread track returned the expected 59 intervals";
+}
+
+TEST_F(reader_test, v3_get_track_stats_counter_matches_scalar_slice)
+{
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+
+    auto samples = m_reader->get_scalar_track(counter->id);
+    auto stats   = m_reader->get_track_stats(counter->id);
+    expect_stats_match_scalars(stats, samples);
+    ASSERT_GT(stats.count, 0U);
+}
+
+TEST_F(reader_test, v3_get_track_stats_unknown_id_returns_empty)
+{
+    // Unknown track id is not an error: zero count, nullopt bounds.
+    constexpr size_t kUnknownTrackId = 999999999;
+    auto             stats           = m_reader->get_track_stats(kUnknownTrackId);
+    ASSERT_EQ(stats.count, 0U);
+    ASSERT_FALSE(stats.min_ts.has_value());
+    ASSERT_FALSE(stats.max_ts.has_value());
+}
+
 // ============================================================================
 // Track-scoped API tests — v3 synthetic edge-matrix fixture (rocpd_v3_edge.db)
 // Built at configure time from fixtures/rocpd_v3_edge_data.sql + the canonical v3
@@ -1145,6 +1247,51 @@ TEST_F(reader_v3_edge_test, track_scoped_queries_respect_type)
     ASSERT_TRUE(m_reader->get_scalar_track(cpu->id).empty());
 }
 
+TEST_F(reader_v3_edge_test, get_track_stats_matches_slices_for_every_track_type)
+{
+    // Hand-authored oracle: the 4-region cpu_thread track spans start 1000..end 6000+.
+    // For every track, stats must equal MIN/MAX/COUNT over the exact interval/scalar
+    // slice — this covers cpu_thread, gpu_queue, dma (qs/q_only/s_only/neither NULL
+    // patterns) and counter in one pass, per synthesized track flavor.
+    auto tracks = m_reader->get_all_tracks();
+
+    bool checked_cpu = false;
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread))
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        auto stats     = m_reader->get_track_stats(t->id);
+        expect_stats_match_intervals(stats, intervals);
+        if(intervals.size() == 4)
+        {
+            ASSERT_EQ(stats.min_ts.value(), 1000U);
+            checked_cpu = true;
+        }
+    }
+    ASSERT_TRUE(checked_cpu) << "expected a 4-region cpu_thread track";
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue))
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        expect_stats_match_intervals(m_reader->get_track_stats(t->id), intervals);
+    }
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma))
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        expect_stats_match_intervals(m_reader->get_track_stats(t->id), intervals);
+    }
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter))
+    {
+        auto samples = m_reader->get_scalar_track(t->id);
+        expect_stats_match_scalars(m_reader->get_track_stats(t->id), samples);
+    }
+}
+
 // ============================================================================
 // Track-scoped API tests — v4.0 real fixture (rocpd_v4.db)
 // cpu_thread + gpu_queue + dma interval tracks and flows. This fixture has no
@@ -1279,6 +1426,39 @@ TEST_F(reader_v4_test, v4_get_flows_links_regions_to_gpu_events)
     }
 }
 
+TEST_F(reader_v4_test, v4_get_track_stats_matches_slices_for_interval_tracks)
+{
+    // v4.0 tracks are canonical rocpd_track rows: stats resolve MIN/MAX through the
+    // timestamp spine (start_id/end_id -> rocpd_timestamp). Cross-check every
+    // interval track against its slice, plus pin the known cpu_thread bounds.
+    auto tracks = m_reader->get_all_tracks();
+
+    auto cpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_NE(cpu, nullptr);
+    auto cpu_intervals = m_reader->get_interval_track(cpu->id);
+    auto cpu_stats     = m_reader->get_track_stats(cpu->id);
+    expect_stats_match_intervals(cpu_stats, cpu_intervals);
+    ASSERT_EQ(cpu_stats.count, 384U);
+    ASSERT_EQ(cpu_stats.min_ts.value(), 516609802359041U);
+
+    auto gpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
+    ASSERT_NE(gpu, nullptr);
+    auto gpu_intervals = m_reader->get_interval_track(gpu->id);
+    auto gpu_stats     = m_reader->get_track_stats(gpu->id);
+    expect_stats_match_intervals(gpu_stats, gpu_intervals);
+    ASSERT_EQ(gpu_stats.count, 20U);
+    ASSERT_EQ(gpu_stats.min_ts.value(), 516609921772013U);
+
+    for(const auto& d :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma))
+    {
+        auto intervals = m_reader->get_interval_track(d->id);
+        expect_stats_match_intervals(m_reader->get_track_stats(d->id), intervals);
+    }
+}
+
 // ============================================================================
 // Track-scoped API tests — v4.0 synthetic counter fixture (rocpd_v4_counter.db)
 // Built at configure time from committed SQL. Exists solely to exercise the
@@ -1374,6 +1554,38 @@ TEST_F(reader_v4_counter_test, v4_get_scalar_track_on_non_counter_returns_empty)
         find_first_track(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
     ASSERT_NE(cpu, nullptr);
     ASSERT_TRUE(m_reader->get_scalar_track(cpu->id).empty());
+}
+
+TEST_F(reader_v4_counter_test, v4_get_track_stats_counter_matches_scalar_slice)
+{
+    // v4.0 scalar stats resolve MIN/MAX through the timestamp spine. Known oracle:
+    // 3 samples at timestamps 1000/2000/3000 -> min 1000, max 3000, count 3.
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+
+    auto samples = m_reader->get_scalar_track(counter->id);
+    auto stats   = m_reader->get_track_stats(counter->id);
+    expect_stats_match_scalars(stats, samples);
+    ASSERT_EQ(stats.count, 3U);
+    ASSERT_EQ(stats.min_ts.value(), 1000U);
+    ASSERT_EQ(stats.max_ts.value(), 3000U);
+}
+
+TEST_F(reader_v4_counter_test, v4_get_track_stats_bare_cpu_thread_is_empty)
+{
+    // The bare cpu_thread track has no region rows: count 0, nullopt bounds — the
+    // honest "empty track" signal (SQL MIN/MAX over an empty set), not an error.
+    auto tracks = m_reader->get_all_tracks();
+    auto cpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_NE(cpu, nullptr);
+
+    auto stats = m_reader->get_track_stats(cpu->id);
+    ASSERT_EQ(stats.count, 0U);
+    ASSERT_FALSE(stats.min_ts.has_value());
+    ASSERT_FALSE(stats.max_ts.has_value());
 }
 
 }  // namespace
