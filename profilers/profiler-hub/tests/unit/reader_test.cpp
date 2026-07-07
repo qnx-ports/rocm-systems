@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <memory>
+#include <set>
 #include <string>
 
 namespace
@@ -873,6 +874,51 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_ordered_values)
     ASSERT_EQ(details->name, "bit_extract");
 }
 
+TEST_F(reader_test, v3_get_interval_track_cpu_thread_carries_category)
+{
+    // Category is per-EVENT, not derivable from the track type or region kind: the
+    // 59 regions on this one cpu_thread carry several distinct categories. The reader
+    // resolves it via rocpd_string on the v3 backend; assert it round-trips against
+    // the authoritative get_region_details() -> event->event_category oracle.
+    auto tracks = m_reader->get_all_tracks();
+    auto cpu_tracks =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_FALSE(cpu_tracks.empty());
+
+    profiler_hub::reader_types::interval_event_list_t region_intervals;
+    for(const auto& t : cpu_tracks)
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        if(intervals.size() == 59)
+        {
+            region_intervals = std::move(intervals);
+            break;
+        }
+    }
+    ASSERT_EQ(region_intervals.size(), 59);
+
+    // First interval (region id=59) resolves to the "host" category.
+    ASSERT_EQ(region_intervals.front().opaque_id, 59);
+    ASSERT_EQ(region_intervals.front().category, "host");
+
+    // Every interval's carried category matches the detail-path oracle, and the
+    // track spans multiple distinct categories (host/numa/pthread/rocm_hip_api/
+    // rocm_marker_api) -- proving fidelity is per-event, not per-track.
+    std::set<std::string> seen;
+    for(const auto& ev : region_intervals)
+    {
+        auto details = m_reader->get_region_details(ev.opaque_id);
+        ASSERT_TRUE(details.has_value());
+        ASSERT_NE(details->event, nullptr);
+        ASSERT_EQ(ev.category, details->event->event_category);
+        seen.insert(ev.category);
+    }
+    ASSERT_GT(seen.size(), 1U) << "expected several distinct per-event categories";
+    ASSERT_TRUE(seen.count("host"));
+    ASSERT_TRUE(seen.count("rocm_hip_api"));
+    ASSERT_TRUE(seen.count("numa"));
+}
+
 TEST_F(reader_test, v3_get_scalar_track_counter_ordered_and_details)
 {
     auto tracks = m_reader->get_all_tracks();
@@ -1368,6 +1414,31 @@ TEST_F(reader_v4_test, v4_get_interval_track_cpu_thread_regions)
 
     // opaque_id resolves through the region detail path.
     ASSERT_TRUE(m_reader->get_region_details(first.opaque_id).has_value());
+}
+
+TEST_F(reader_v4_test, v4_get_interval_track_cpu_thread_carries_category)
+{
+    // v4 resolves category through rocpd_info_category (a different table than v3's
+    // rocpd_string), so this exercises the v4 branch of the per-backend resolution.
+    // All 384 regions in this capture are "hsa_api"; assert the carried category
+    // matches the detail-path oracle for every interval.
+    auto tracks = m_reader->get_all_tracks();
+    auto cpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_NE(cpu, nullptr);
+
+    auto intervals = m_reader->get_interval_track(cpu->id);
+    ASSERT_EQ(intervals.size(), 384);
+
+    ASSERT_EQ(intervals.front().category, "hsa_api");
+    for(const auto& ev : intervals)
+    {
+        auto details = m_reader->get_region_details(ev.opaque_id);
+        ASSERT_TRUE(details.has_value());
+        ASSERT_NE(details->event, nullptr);
+        ASSERT_EQ(ev.category, details->event->event_category);
+        ASSERT_EQ(ev.category, "hsa_api");
+    }
 }
 
 TEST_F(reader_v4_test, v4_get_interval_track_gpu_queue_dispatches)
