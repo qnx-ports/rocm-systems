@@ -225,11 +225,12 @@ TEST_F(reader_test, get_code_object_list_returns_correct_value)
 TEST_F(reader_test, get_track_list_returns_correct_count)
 {
     auto track_list = m_reader->get_all_tracks();
-    // 2369 real rocpd_track rows + 2 synthesized tracks (1 gpu_queue from the
-    // sole distinct kernel_dispatch (nid,pid,agent_id,queue_id), 1 dma from the
-    // sole distinct memory_copy (nid,pid,queue_id,stream_id)) = 2371. The +2
-    // synthesis is the task-002 gpu_queue/dma feature; the prior 2369 predates it.
-    ASSERT_EQ(track_list.size(), 2371);
+    // cpu_thread/region tracks are synthesized from rocpd_region, NOT read from the
+    // 2369-row rocpd_track grab-bag. rocpd_track contributes only its 54 counter tracks
+    // (rows referenced by rocpd_sample). Synthesis adds 1 gpu_queue + 1 dma + 1 region
+    // (the sole (nid,pid,tid)=(...,67979,1) thread, all regions main => one track):
+    //   54 counter + 1 gpu_queue + 1 dma + 1 cpu_thread = 57.
+    ASSERT_EQ(track_list.size(), 57);
 }
 
 TEST_F(reader_test, get_track_list_first_track_has_correct_values)
@@ -237,10 +238,21 @@ TEST_F(reader_test, get_track_list_first_track_has_correct_values)
     auto track_list = m_reader->get_all_tracks();
     ASSERT_GE(track_list.size(), 1);
 
-    // First track has name_id=9 which maps to "GPU Kernel Dispatch [0] Queue 1"
-    ASSERT_EQ(track_list[0]->name, "GPU Kernel Dispatch [0] Queue 1");
-    ASSERT_EQ(track_list[0]->node_info->node_id, 9162464413581981795);
-    ASSERT_EQ(track_list[0]->process_info->pid, 67979);
+    // The real capture has exactly one synthesized cpu_thread (region) track, for the
+    // sole region-bearing thread (nid,pid,tid)=(...,67979,1). Its identity resolves
+    // through the info tables and its name comes from rocpd_info_thread.name.
+    auto cpu =
+        find_tracks(track_list, profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_EQ(cpu.size(), 1U);
+    const auto& t = cpu.front();
+    ASSERT_EQ(t->name, "Thread 67979");
+    ASSERT_EQ(t->region_kind, profiler_hub::reader_types::region_track_kind_t::main);
+    ASSERT_NE(t->node_info, nullptr);
+    ASSERT_EQ(t->node_info->node_id, 9162464413581981795);
+    ASSERT_NE(t->process_info, nullptr);
+    ASSERT_EQ(t->process_info->pid, 67979);
+    ASSERT_NE(t->thread_info, nullptr);
+    ASSERT_EQ(t->thread_info->thread_id, 67979);
 }
 
 TEST_F(reader_test, get_pmc_info_list_returns_correct_count)
@@ -919,16 +931,18 @@ protected:
 
 TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
 {
-    // 5 rocpd_track rows (3 cpu_thread, 2 counter) + 2 synthesized gpu_queue
-    // + 2 synthesized dma = 9 tracks total.
+    // cpu_thread/region tracks are synthesized from rocpd_region, not rocpd_track.
+    // rocpd_track contributes only its 3 sampled (counter) rows (2, 3, 6); the
+    // non-counter rows (1, 4, 5) are ignored. Synthesis adds 1 cpu_thread (the sole
+    // (1,1,1) thread, all regions main), 2 gpu_queue, 2 dma => 8 tracks total.
     auto tracks = m_reader->get_all_tracks();
-    ASSERT_EQ(tracks.size(), 9U);
+    ASSERT_EQ(tracks.size(), 8U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread).size(),
-        3U);
+        1U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter).size(),
-        2U);
+        3U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue).size(),
         2U);
@@ -936,18 +950,23 @@ TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
               2U);
 }
 
-TEST_F(reader_v3_edge_test, cpu_thread_identity_null_pid_and_null_tid_branches)
+TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
 {
-    // Three cpu_thread rows exercise the nullable-identity branches:
-    //   track 1: pid + tid set   -> process_info AND thread_info populated
-    //   track 4: pid set, tid NULL -> process_info set, thread_info NULL
-    //   track 5: pid NULL          -> process_info NULL, thread_info NULL
+    // Re-homed from the former cpu_thread coverage: under region-synthesis, region
+    // tracks always carry a real (nid,pid,tid), so the NULL-pid/NULL-tid identity
+    // branches can no longer be exercised on cpu_thread tracks. v3 counter tracks
+    // still come from rocpd_track (Q10) and CAN carry NULL pid/tid, so the same
+    // nullable-identity matrix now lives here:
+    //   track 2: pid set, tid NULL -> process_info set,  thread_info NULL
+    //   track 3: pid + tid set     -> process_info set,  thread_info SET
+    //   track 6: pid NULL          -> process_info NULL, thread_info NULL
     auto tracks = m_reader->get_all_tracks();
-    auto cpu = find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
-    ASSERT_EQ(cpu.size(), 3U);
+    auto counters =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_EQ(counters.size(), 3U);
 
     int with_thread = 0, with_process = 0, without_process = 0;
-    for(const auto& t : cpu)
+    for(const auto& t : counters)
     {
         if(t->thread_info != nullptr) ++with_thread;
         if(t->process_info != nullptr)
@@ -955,9 +974,9 @@ TEST_F(reader_v3_edge_test, cpu_thread_identity_null_pid_and_null_tid_branches)
         else
             ++without_process;
     }
-    // Exactly one cpu_thread track carries a resolved thread (tid set).
+    // Exactly one counter track carries a resolved thread (tid set -- track 3).
     ASSERT_EQ(with_thread, 1);
-    // Exactly one carries no process (pid NULL); the other two do.
+    // Exactly one carries no process (pid NULL -- track 6); the other two do.
     ASSERT_EQ(without_process, 1);
     ASSERT_EQ(with_process, 2);
 }
@@ -970,7 +989,7 @@ TEST_F(reader_v3_edge_test, counter_thread_info_tracks_tid_agent_info_always_nul
     auto tracks = m_reader->get_all_tracks();
     auto counters =
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
-    ASSERT_EQ(counters.size(), 2U);
+    ASSERT_EQ(counters.size(), 3U);
 
     profiler_hub::reader_types::track_info_ptr_t no_tid_counter;    // GRBM_COUNT
     profiler_hub::reader_types::track_info_ptr_t with_tid_counter;  // SQ_WAVES
