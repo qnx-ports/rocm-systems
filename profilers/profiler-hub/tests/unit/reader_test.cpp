@@ -965,6 +965,30 @@ TEST_F(reader_test, v3_get_interval_track_gpu_queue_carries_category)
     ASSERT_EQ(ev.category, details->event->event_category);
 }
 
+TEST_F(reader_test, v3_get_interval_track_dma_carries_category)
+{
+    // Standalone queue-keyed dma (memory-copy) intervals carry per-event category,
+    // resolved in-SQL via rocpd_string on the v3 backend (LEFT JOIN, additive). Assert
+    // it round-trips against the authoritative get_memory_copy_details() ->
+    // event->event_category oracle -- the same fidelity contract region/gpu_queue meet.
+    auto tracks = m_reader->get_all_tracks();
+    auto dma    = find_first_track(tracks, profiler_hub::reader_types::track_type_t::dma);
+    ASSERT_NE(dma, nullptr);
+
+    auto intervals = m_reader->get_interval_track(dma->id);
+    // Fixture: one dma track (nid,pid,queue_id=0,stream_id=0) with 2 memory copies.
+    ASSERT_EQ(intervals.size(), 2U);
+
+    for(const auto& ev : intervals)
+    {
+        ASSERT_EQ(ev.category, "rocm_memory_copy");
+        auto details = m_reader->get_memory_copy_details(ev.opaque_id);
+        ASSERT_TRUE(details.has_value());
+        ASSERT_NE(details->event, nullptr);
+        ASSERT_EQ(ev.category, details->event->event_category);
+    }
+}
+
 TEST_F(reader_test, v3_get_scalar_track_counter_ordered_and_details)
 {
     auto tracks = m_reader->get_all_tracks();
@@ -1710,6 +1734,31 @@ TEST_F(reader_v4_test, v4_get_interval_track_dma_memory_copies)
         ASSERT_GE(intervals.front().end, intervals.front().start);
         ASSERT_TRUE(
             m_reader->get_memory_copy_details(intervals.front().opaque_id).has_value());
+    }
+}
+
+TEST_F(reader_v4_test, v4_get_interval_track_dma_carries_category)
+{
+    // v4 resolves memory-copy category through rocpd_info_category (a different table
+    // than v3's rocpd_string), exercising the v4 branch. Both dma tracks hold a single
+    // "memory_copy" interval; assert each carried category matches the detail-path
+    // oracle.
+    auto tracks = m_reader->get_all_tracks();
+    auto dma    = find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma);
+    ASSERT_EQ(dma.size(), 2);
+
+    for(const auto& d : dma)
+    {
+        auto intervals = m_reader->get_interval_track(d->id);
+        ASSERT_EQ(intervals.size(), 1U);
+        for(const auto& ev : intervals)
+        {
+            ASSERT_EQ(ev.category, "memory_copy");
+            auto details = m_reader->get_memory_copy_details(ev.opaque_id);
+            ASSERT_TRUE(details.has_value());
+            ASSERT_NE(details->event, nullptr);
+            ASSERT_EQ(ev.category, details->event->event_category);
+        }
     }
 }
 
