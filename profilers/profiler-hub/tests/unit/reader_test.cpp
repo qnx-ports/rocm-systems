@@ -195,6 +195,11 @@ TEST_F(reader_test, get_agent_list_returns_correct_value)
     auto agent_list = m_reader->get_all_agents();
     ASSERT_EQ(agent_list.size(), 10);
 
+    // Raw rocpd_info_agent.id is exposed so callers can key the agent (topology
+    // nesting / cached-table lookups) without re-querying. Fixture ids run 1..10.
+    ASSERT_EQ(agent_list[0]->id, 1);
+    ASSERT_EQ(agent_list[2]->id, 3);
+
     ASSERT_EQ(agent_list[0]->agent_type, "CPU");
     ASSERT_EQ(agent_list[0]->type_index, 0);
     ASSERT_EQ(agent_list[0]->absolute_index, 0);
@@ -920,6 +925,46 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_carries_category)
     ASSERT_TRUE(seen.count("numa"));
 }
 
+TEST_F(reader_test, v3_gpu_queue_track_carries_agent_id)
+{
+    // The gpu_queue track exposes its owning agent's raw rocpd_info_agent.id via
+    // agent_info->id (the same shared agent_info the reader caches). Callers need
+    // this numeric id to nest the queue under its GPU in the topology view and to
+    // key the "Agent" cached table -- neither is reachable without the raw id.
+    auto tracks = m_reader->get_all_tracks();
+    auto gpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
+    ASSERT_NE(gpu, nullptr);
+    ASSERT_NE(gpu->agent_info, nullptr);
+    // Fixture: the sole gpu_queue belongs to agent_id=3 (a GPU, absolute_index 2).
+    ASSERT_EQ(gpu->agent_info->id, 3);
+    ASSERT_EQ(gpu->agent_info->agent_type, "GPU");
+}
+
+TEST_F(reader_test, v3_get_interval_track_gpu_queue_carries_category)
+{
+    // gpu_queue kernel-dispatch intervals carry per-event category, resolved in-SQL
+    // via rocpd_string on the v3 backend (LEFT JOIN, additive). Assert it round-trips
+    // against the authoritative get_kernel_dispatch_details() -> event->event_category
+    // oracle -- the same fidelity contract the region/stream interval tracks meet.
+    auto tracks = m_reader->get_all_tracks();
+    auto gpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
+    ASSERT_NE(gpu, nullptr);
+
+    auto intervals = m_reader->get_interval_track(gpu->id);
+    // Fixture: one kernel dispatch on this queue (agent_id=3, queue_id=1).
+    ASSERT_EQ(intervals.size(), 1U);
+
+    const auto& ev = intervals.front();
+    ASSERT_EQ(ev.category, "rocm_kernel_dispatch");
+
+    auto details = m_reader->get_kernel_dispatch_details(ev.opaque_id);
+    ASSERT_TRUE(details.has_value());
+    ASSERT_NE(details->event, nullptr);
+    ASSERT_EQ(ev.category, details->event->event_category);
+}
+
 TEST_F(reader_test, v3_get_scalar_track_counter_ordered_and_details)
 {
     auto tracks = m_reader->get_all_tracks();
@@ -1612,6 +1657,44 @@ TEST_F(reader_v4_test, v4_get_interval_track_gpu_queue_dispatches)
     // opaque_id resolves through the kernel dispatch detail path.
     ASSERT_TRUE(
         m_reader->get_kernel_dispatch_details(intervals.front().opaque_id).has_value());
+}
+
+TEST_F(reader_v4_test, v4_gpu_queue_track_carries_agent_id)
+{
+    // Same raw-agent-id contract as v3, exercised on the v4 backend (agent_id lives
+    // on rocpd_track here). Fixture: the sole gpu_queue belongs to agent_id=6.
+    auto tracks = m_reader->get_all_tracks();
+    auto gpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
+    ASSERT_NE(gpu, nullptr);
+    ASSERT_NE(gpu->agent_info, nullptr);
+    ASSERT_EQ(gpu->agent_info->id, 6);
+    ASSERT_EQ(gpu->agent_info->agent_type, "GPU");
+}
+
+TEST_F(reader_v4_test, v4_get_interval_track_gpu_queue_carries_category)
+{
+    // v4 resolves gpu_queue kernel-dispatch category through rocpd_info_category (a
+    // different table than v3's rocpd_string), exercising the v4 branch. All 20
+    // dispatches are "kernel_dispatch"; assert each carried category matches the
+    // detail-path oracle.
+    auto tracks = m_reader->get_all_tracks();
+    auto gpu =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
+    ASSERT_NE(gpu, nullptr);
+
+    auto intervals = m_reader->get_interval_track(gpu->id);
+    ASSERT_EQ(intervals.size(), 20U);
+
+    ASSERT_EQ(intervals.front().category, "kernel_dispatch");
+    for(const auto& ev : intervals)
+    {
+        auto details = m_reader->get_kernel_dispatch_details(ev.opaque_id);
+        ASSERT_TRUE(details.has_value());
+        ASSERT_NE(details->event, nullptr);
+        ASSERT_EQ(ev.category, details->event->event_category);
+        ASSERT_EQ(ev.category, "kernel_dispatch");
+    }
 }
 
 TEST_F(reader_v4_test, v4_get_interval_track_dma_memory_copies)
