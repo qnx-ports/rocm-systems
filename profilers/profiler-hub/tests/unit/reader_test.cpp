@@ -283,9 +283,10 @@ TEST_F(reader_test, get_track_list_returns_correct_count)
     // cpu_thread/region tracks are synthesized from rocpd_region, NOT read from the
     // 2369-row rocpd_track grab-bag. rocpd_track contributes only its 54 counter tracks
     // (rows referenced by rocpd_sample). Synthesis adds 1 gpu_queue + 1 dma + 1 region
-    // (the sole (nid,pid,tid)=(...,67979,1) thread, all regions main => one track):
-    //   54 counter + 1 gpu_queue + 1 dma + 1 cpu_thread = 57.
-    ASSERT_EQ(track_list.size(), 57);
+    // (the sole (nid,pid,tid)=(...,67979,1) thread, all regions main => one track) +
+    // 1 stream (the sole stream_id=0, aggregating kernel_dispatch + memory_copy):
+    //   54 counter + 1 gpu_queue + 1 dma + 1 cpu_thread + 1 stream = 58.
+    ASSERT_EQ(track_list.size(), 58);
 }
 
 TEST_F(reader_test, get_track_list_first_track_has_correct_values)
@@ -1047,6 +1048,77 @@ TEST_F(reader_test, v3_get_track_stats_unknown_id_returns_empty)
     ASSERT_FALSE(stats.max_ts.has_value());
 }
 
+TEST_F(reader_test, v3_get_all_tracks_synthesizes_stream_track)
+{
+    // The capture has one stream (stream_id=0). Stream tracks aggregate three event
+    // tables and are ADDITIVE to the gpu_queue/dma tracks (the same events also appear
+    // there), so the sole stream is a distinct synthesized track keyed (nid,pid,0).
+    auto tracks  = m_reader->get_all_tracks();
+    auto streams = find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_EQ(streams.size(), 1U);
+
+    const auto& s = streams.front();
+    ASSERT_NE(s->stream_info, nullptr);
+    ASSERT_EQ(s->stream_info->stream_id, 0U);
+    ASSERT_NE(s->node_info, nullptr);
+    ASSERT_EQ(s->node_info->node_id, 9162464413581981795);
+    ASSERT_NE(s->process_info, nullptr);
+    ASSERT_EQ(s->process_info->pid, 67979);
+}
+
+TEST_F(reader_test, v3_get_interval_track_stream_aggregates_ops_with_op_kind)
+{
+    // The stream track unions kernel_dispatch + memory_copy + memory_allocate that
+    // share the stream. This capture's stream 0 has 1 dispatch + 2 copies + 0 allocs.
+    // The per-event op_kind disambiguates which get_*_details() applies to each
+    // opaque_id (the three id spaces collide), so verify op_kind is populated and the
+    // matching detail method resolves for every event.
+    using profiler_hub::reader_types::event_type_t;
+    auto tracks = m_reader->get_all_tracks();
+    auto stream =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_NE(stream, nullptr);
+
+    auto intervals = m_reader->get_interval_track(stream->id);
+    ASSERT_EQ(intervals.size(), 3U);
+    ASSERT_TRUE(is_start_sorted(intervals));
+
+    size_t kd = 0, mc = 0;
+    for(const auto& ev : intervals)
+    {
+        ASSERT_TRUE(ev.op_kind.has_value());
+        ASSERT_GE(ev.end, ev.start);
+        switch(ev.op_kind.value())
+        {
+            case event_type_t::kernel_dispatch:
+                ++kd;
+                ASSERT_TRUE(
+                    m_reader->get_kernel_dispatch_details(ev.opaque_id).has_value());
+                break;
+            case event_type_t::memory_copy:
+                ++mc;
+                ASSERT_TRUE(m_reader->get_memory_copy_details(ev.opaque_id).has_value());
+                break;
+            default: FAIL() << "unexpected op_kind on stream 0";
+        }
+    }
+    ASSERT_EQ(kd, 1U);
+    ASSERT_EQ(mc, 2U);
+}
+
+TEST_F(reader_test, v3_get_track_stats_stream_matches_interval_slice)
+{
+    auto tracks = m_reader->get_all_tracks();
+    auto stream =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_NE(stream, nullptr);
+
+    auto intervals = m_reader->get_interval_track(stream->id);
+    auto stats     = m_reader->get_track_stats(stream->id);
+    expect_stats_match_intervals(stats, intervals);
+    ASSERT_EQ(stats.count, 3U);
+}
+
 // ============================================================================
 // Track-scoped API tests — v3 synthetic edge-matrix fixture (rocpd_v3_edge.db)
 // Built at configure time from fixtures/rocpd_v3_edge_data.sql + the canonical v3
@@ -1082,9 +1154,10 @@ TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
     // cpu_thread/region tracks are synthesized from rocpd_region, not rocpd_track.
     // rocpd_track contributes only its 3 sampled (counter) rows (2, 3, 6); the
     // non-counter rows (1, 4, 5) are ignored. Synthesis adds 1 cpu_thread (the sole
-    // (1,1,1) thread, all regions main), 2 gpu_queue, 2 dma => 8 tracks total.
+    // (1,1,1) thread, all regions main), 2 gpu_queue, 2 dma, and 2 stream (distinct
+    // stream_id 1 and 2 across the three event tables) => 10 tracks total.
     auto tracks = m_reader->get_all_tracks();
-    ASSERT_EQ(tracks.size(), 8U);
+    ASSERT_EQ(tracks.size(), 10U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread).size(),
         1U);
@@ -1096,6 +1169,8 @@ TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
         2U);
     ASSERT_EQ(find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma).size(),
               2U);
+    ASSERT_EQ(
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream).size(), 2U);
 }
 
 TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
@@ -1336,6 +1411,83 @@ TEST_F(reader_v3_edge_test, get_track_stats_matches_slices_for_every_track_type)
         auto samples = m_reader->get_scalar_track(t->id);
         expect_stats_match_scalars(m_reader->get_track_stats(t->id), samples);
     }
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream))
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        expect_stats_match_intervals(m_reader->get_track_stats(t->id), intervals);
+    }
+}
+
+TEST_F(reader_v3_edge_test, get_interval_track_stream_aggregates_three_op_kinds)
+{
+    // This is the only fixture exercising all THREE UNION legs of a stream track,
+    // including memory_allocate (no real capture available to the project has a
+    // memory_allocate row carrying a stream_id). Hand-authored oracle:
+    //   stream 1 (nid,pid,stream_id)=(1,1,1): 3 kernel_dispatch + 2 memory_copy +
+    //       1 memory_allocate = 6 events, ORDER BY start:
+    //       kd3(1200) kd2(1400) kd1(1600) mc3(2100) mc1(2200) ma1(6100)
+    //   stream 2 (1,1,2): 1 memory_copy = 1 event (mc2 start 2400)
+    // Every event's op_kind selects the get_*_details() overload for its opaque_id.
+    using profiler_hub::reader_types::event_type_t;
+    auto tracks  = m_reader->get_all_tracks();
+    auto streams = find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_EQ(streams.size(), 2U);
+
+    profiler_hub::reader_types::track_info_ptr_t s1, s2;
+    for(const auto& s : streams)
+    {
+        ASSERT_NE(s->stream_info, nullptr);
+        if(s->stream_info->stream_id == 1)
+            s1 = s;
+        else if(s->stream_info->stream_id == 2)
+            s2 = s;
+    }
+    ASSERT_NE(s1, nullptr);
+    ASSERT_NE(s2, nullptr);
+
+    auto iv1 = m_reader->get_interval_track(s1->id);
+    ASSERT_EQ(iv1.size(), 6U);
+    ASSERT_TRUE(is_start_sorted(iv1));
+
+    size_t kd = 0, mc = 0, ma = 0;
+    for(const auto& ev : iv1)
+    {
+        ASSERT_TRUE(ev.op_kind.has_value());
+        switch(ev.op_kind.value())
+        {
+            case event_type_t::kernel_dispatch:
+                ++kd;
+                ASSERT_TRUE(
+                    m_reader->get_kernel_dispatch_details(ev.opaque_id).has_value());
+                break;
+            case event_type_t::memory_copy:
+                ++mc;
+                ASSERT_TRUE(m_reader->get_memory_copy_details(ev.opaque_id).has_value());
+                break;
+            case event_type_t::memory_allocate:
+                ++ma;
+                ASSERT_TRUE(m_reader->get_memory_alloc_details(ev.opaque_id).has_value());
+                break;
+            default: FAIL() << "unexpected op_kind on stream 1";
+        }
+    }
+    ASSERT_EQ(kd, 3U);
+    ASSERT_EQ(mc, 2U);
+    ASSERT_EQ(ma, 1U);
+    ASSERT_EQ(iv1.front().start, 1200);
+    ASSERT_EQ(iv1.front().op_kind.value(), event_type_t::kernel_dispatch);
+    ASSERT_EQ(iv1.back().start, 6100);
+    ASSERT_EQ(iv1.back().op_kind.value(), event_type_t::memory_allocate);
+
+    auto iv2 = m_reader->get_interval_track(s2->id);
+    ASSERT_EQ(iv2.size(), 1U);
+    ASSERT_EQ(iv2.front().start, 2400);
+    ASSERT_EQ(iv2.front().op_kind.value(), event_type_t::memory_copy);
+
+    expect_stats_match_intervals(m_reader->get_track_stats(s1->id), iv1);
+    expect_stats_match_intervals(m_reader->get_track_stats(s2->id), iv2);
 }
 
 // ============================================================================
@@ -1367,8 +1519,9 @@ protected:
 TEST_F(reader_v4_test, v4_track_classification_and_identity)
 {
     auto tracks = m_reader->get_all_tracks();
-    // Fixture has 4 tracks: 1 cpu_thread, 1 gpu_queue, 2 dma.
-    ASSERT_EQ(tracks.size(), 4);
+    // Fixture has 5 tracks: 1 cpu_thread, 1 gpu_queue, 2 dma, 1 stream (the sole
+    // rocpd_track.stream_id=0, aggregating kernel_dispatch + memory_copy).
+    ASSERT_EQ(tracks.size(), 5);
 
     auto cpu = find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
     auto gpu = find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
@@ -1376,6 +1529,8 @@ TEST_F(reader_v4_test, v4_track_classification_and_identity)
     ASSERT_EQ(cpu.size(), 1);
     ASSERT_EQ(gpu.size(), 1);
     ASSERT_EQ(dma.size(), 2);
+    ASSERT_EQ(
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream).size(), 1U);
 
     // gpu_queue carries agent + queue identity (Q10: v4 GPU tracks scoped to agent).
     ASSERT_NE(gpu[0]->agent_info, nullptr);
@@ -1528,6 +1683,63 @@ TEST_F(reader_v4_test, v4_get_track_stats_matches_slices_for_interval_tracks)
         auto intervals = m_reader->get_interval_track(d->id);
         expect_stats_match_intervals(m_reader->get_track_stats(d->id), intervals);
     }
+}
+
+TEST_F(reader_v4_test, v4_get_interval_track_stream_aggregates_ops_with_op_kind)
+{
+    // v4 stream tracks are synthesized from DISTINCT (nid,pid,stream_id) on
+    // rocpd_track; each UNION leg JOINs rocpd_track ON stream_id and resolves times
+    // through the timestamp spine. This capture's sole stream (stream_id=0) unions
+    // 20 kernel_dispatch + 2 memory_copy + 0 memory_allocate = 22 events. The stream
+    // aggregates ACROSS ops, so its earliest start (a memory_copy at 516609915990946)
+    // precedes the gpu_queue's first dispatch (516609921772013) — proof the stream is
+    // not just the queue track relabeled. op_kind disambiguates the colliding opaque_id
+    // spaces so the matching get_*_details() resolves for every event.
+    using profiler_hub::reader_types::event_type_t;
+    auto tracks = m_reader->get_all_tracks();
+    auto stream =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_NE(stream, nullptr);
+
+    auto intervals = m_reader->get_interval_track(stream->id);
+    ASSERT_EQ(intervals.size(), 22U);
+    ASSERT_TRUE(is_start_sorted(intervals));
+    ASSERT_EQ(intervals.front().start, 516609915990946);
+
+    size_t kd = 0, mc = 0;
+    for(const auto& ev : intervals)
+    {
+        ASSERT_TRUE(ev.op_kind.has_value());
+        ASSERT_GE(ev.end, ev.start);
+        switch(ev.op_kind.value())
+        {
+            case event_type_t::kernel_dispatch:
+                ++kd;
+                ASSERT_TRUE(
+                    m_reader->get_kernel_dispatch_details(ev.opaque_id).has_value());
+                break;
+            case event_type_t::memory_copy:
+                ++mc;
+                ASSERT_TRUE(m_reader->get_memory_copy_details(ev.opaque_id).has_value());
+                break;
+            default: FAIL() << "unexpected op_kind on stream 0";
+        }
+    }
+    ASSERT_EQ(kd, 20U);
+    ASSERT_EQ(mc, 2U);
+}
+
+TEST_F(reader_v4_test, v4_get_track_stats_stream_matches_interval_slice)
+{
+    auto tracks = m_reader->get_all_tracks();
+    auto stream =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::stream);
+    ASSERT_NE(stream, nullptr);
+
+    auto intervals = m_reader->get_interval_track(stream->id);
+    auto stats     = m_reader->get_track_stats(stream->id);
+    expect_stats_match_intervals(stats, intervals);
+    ASSERT_EQ(stats.count, 22U);
 }
 
 // ============================================================================
