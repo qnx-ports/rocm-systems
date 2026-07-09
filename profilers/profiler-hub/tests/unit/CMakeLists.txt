@@ -156,6 +156,53 @@ add_custom_command(
 add_custom_target(profiler-hub_v3_edge_fixture DEPENDS ${ROCPD_DB_V3_EDGE_PATH})
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_edge_fixture)
 
+# Synthetic v3 dma-by-destination-agent fixture, generated at build time from
+# committed SQL against the canonical v3 schema (same mechanism as the edge
+# fixture above). Encodes the crossed 2-agent x 2-stream x 12 = 48 memory_copy
+# pattern that proves dma tracks partition by dst_agent_id, not stream_id.
+set(_v3d_uuid "00000000000000000000000000d30003")
+set(_v3d_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3d_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_dma_agent_data.sql)
+set(_v3d_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_dma_agent_gen.sql)
+file(READ ${_v3d_schema_src} _v3d_schema)
+file(READ ${_v3d_data_src} _v3d_data)
+# Strip the trailing rocpd_metadata DML (double-quoted string literals the modern
+# sqlite3 CLI rejects in DML); the reader never reads metadata. See the edge block.
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3d_schema
+    "${_v3d_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3d_uuid}" _v3d_schema "${_v3d_schema}")
+string(REPLACE "{{guid}}" "${_v3d_uuid}" _v3d_schema "${_v3d_schema}")
+string(REPLACE "{{uuid}}" "_${_v3d_uuid}" _v3d_data "${_v3d_data}")
+string(REPLACE "{{guid}}" "${_v3d_uuid}" _v3d_data "${_v3d_data}")
+file(WRITE ${_v3d_gen_sql} "${_v3d_schema}\n${_v3d_data}\n")
+
+set(ROCPD_DB_V3_DMA_AGENT_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_dma_agent.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_DMA_AGENT_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_DMA_AGENT_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_DMA_AGENT_PATH}
+        ".read ${_v3d_gen_sql}"
+    DEPENDS ${_v3d_gen_sql} ${_v3d_schema_src} ${_v3d_data_src}
+    COMMENT "Generating synthetic v3 dma-by-destination-agent test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_dma_agent_fixture
+    DEPENDS ${ROCPD_DB_V3_DMA_AGENT_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_dma_agent_fixture)
+
 target_compile_definitions(
     profiler-hub_unit_tests
     PUBLIC
@@ -163,6 +210,7 @@ target_compile_definitions(
         ROCPD_DB_V4_PATH="${ROCPD_DB_V4_PATH}"
         ROCPD_DB_V4_COUNTER_PATH="${ROCPD_DB_V4_COUNTER_PATH}"
         ROCPD_DB_V3_EDGE_PATH="${ROCPD_DB_V3_EDGE_PATH}"
+        ROCPD_DB_V3_DMA_AGENT_PATH="${ROCPD_DB_V3_DMA_AGENT_PATH}"
 )
 
 target_include_directories(

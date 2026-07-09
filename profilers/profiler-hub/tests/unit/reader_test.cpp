@@ -287,11 +287,15 @@ TEST_F(reader_test, get_track_list_returns_correct_count)
     auto track_list = m_reader->get_all_tracks();
     // cpu_thread/region tracks are synthesized from rocpd_region, NOT read from the
     // 2369-row rocpd_track grab-bag. rocpd_track contributes only its 54 counter tracks
-    // (rows referenced by rocpd_sample). Synthesis adds 1 gpu_queue + 1 dma + 1 region
+    // (rows referenced by rocpd_sample). Synthesis adds 1 gpu_queue + 2 dma + 1 region
     // (the sole (nid,pid,tid)=(...,67979,1) thread, all regions main => one track) +
-    // 1 stream (the sole stream_id=0, aggregating kernel_dispatch + memory_copy):
-    //   54 counter + 1 gpu_queue + 1 dma + 1 cpu_thread + 1 stream = 58.
-    ASSERT_EQ(track_list.size(), 58);
+    // 1 stream (the sole stream_id=0, aggregating kernel_dispatch + memory_copy) +
+    // 1 memory (the sole rocpd_memory_allocate row keyed
+    // (nid,agent_id=NULL,queue_id=NULL,pid)). dma tracks are keyed by destination agent
+    // (nid,pid,queue_id,dst_agent_id): the two memory copies target dst_agent_id 1 and 3
+    // => 2 dma tracks (was 1 when keyed by the shared stream_id=0):
+    //   54 counter + 1 gpu_queue + 2 dma + 1 cpu_thread + 1 stream + 1 memory = 60.
+    ASSERT_EQ(track_list.size(), 60);
 }
 
 TEST_F(reader_test, get_track_list_first_track_has_correct_values)
@@ -972,21 +976,27 @@ TEST_F(reader_test, v3_get_interval_track_dma_carries_category)
     // it round-trips against the authoritative get_memory_copy_details() ->
     // event->event_category oracle -- the same fidelity contract region/gpu_queue meet.
     auto tracks = m_reader->get_all_tracks();
-    auto dma    = find_first_track(tracks, profiler_hub::reader_types::track_type_t::dma);
-    ASSERT_NE(dma, nullptr);
+    auto dma    = find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma);
+    // Fixture: 2 memory copies keyed by destination agent (queue_id=0, dst_agent_id 1 &
+    // 3)
+    // => 2 dma tracks, one copy each.
+    ASSERT_EQ(dma.size(), 2U);
 
-    auto intervals = m_reader->get_interval_track(dma->id);
-    // Fixture: one dma track (nid,pid,queue_id=0,stream_id=0) with 2 memory copies.
-    ASSERT_EQ(intervals.size(), 2U);
-
-    for(const auto& ev : intervals)
+    size_t total = 0;
+    for(const auto& track : dma)
     {
-        ASSERT_EQ(ev.category, "rocm_memory_copy");
-        auto details = m_reader->get_memory_copy_details(ev.opaque_id);
-        ASSERT_TRUE(details.has_value());
-        ASSERT_NE(details->event, nullptr);
-        ASSERT_EQ(ev.category, details->event->event_category);
+        auto intervals = m_reader->get_interval_track(track->id);
+        total += intervals.size();
+        for(const auto& ev : intervals)
+        {
+            ASSERT_EQ(ev.category, "rocm_memory_copy");
+            auto details = m_reader->get_memory_copy_details(ev.opaque_id);
+            ASSERT_TRUE(details.has_value());
+            ASSERT_NE(details->event, nullptr);
+            ASSERT_EQ(ev.category, details->event->event_category);
+        }
     }
+    ASSERT_EQ(total, 2U);
 }
 
 TEST_F(reader_test, v3_get_scalar_track_counter_ordered_and_details)
@@ -1223,8 +1233,15 @@ TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
     // cpu_thread/region tracks are synthesized from rocpd_region, not rocpd_track.
     // rocpd_track contributes only its 3 sampled (counter) rows (2, 3, 6); the
     // non-counter rows (1, 4, 5) are ignored. Synthesis adds 1 cpu_thread (the sole
-    // (1,1,1) thread, all regions main), 2 gpu_queue, 2 dma, and 2 stream (distinct
-    // stream_id 1 and 2 across the three event tables) => 10 tracks total.
+    // (1,1,1) thread, all regions main), 2 gpu_queue, 1 dma, and 2 stream (distinct
+    // stream_id 1 and 2 across the three event tables), and 1 memory (the sole
+    // rocpd_memory_allocate row keyed (nid=1, agent_id=1, queue_id=NULL, pid=1) =>
+    // the "a_only" variant) => 10 tracks total.
+    // dma is keyed by (nid,pid,queue_id,dst_agent_id): the three memory copies carry no
+    // dst_agent_id (all NULL) and share queue_id NULL, so they collapse to a single
+    // NULL-agent dma track -- exercising the "neither" interval variant and proving a
+    // NULL dst_agent_id is preserved as one distinct group (not dropped/coalesced away).
+    // (Stream-level separation of these copies still shows up on the 2 stream tracks.)
     auto tracks = m_reader->get_all_tracks();
     ASSERT_EQ(tracks.size(), 10U);
     ASSERT_EQ(
@@ -1237,9 +1254,11 @@ TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue).size(),
         2U);
     ASSERT_EQ(find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma).size(),
-              2U);
+              1U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream).size(), 2U);
+    ASSERT_EQ(
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory).size(), 1U);
 }
 
 TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
@@ -1356,23 +1375,15 @@ TEST_F(reader_v3_edge_test, get_interval_track_gpu_queue_and_dma_ordered)
     ASSERT_TRUE(is_start_sorted(gpu_two));
     ASSERT_EQ(gpu_two.front().start, 1200);
 
-    // Two dma tracks: Stream-X has 2 copies (start 2100, 2200), Stream-Y 1.
+    // One dma track (all 3 copies share queue_id NULL + dst_agent_id NULL under the
+    // by-destination-agent key). Row-id order != start order proves ORDER BY start:
+    // copies at 2200 (mc1), 2400 (mc2), 2100 (mc3) => [2100, 2200, 2400].
     auto dma = find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma);
-    ASSERT_EQ(dma.size(), 2U);
-    profiler_hub::reader_types::interval_event_list_t dma_two;
-    size_t                                            dma_singletons = 0;
-    for(const auto& t : dma)
-    {
-        auto iv = m_reader->get_interval_track(t->id);
-        if(iv.size() == 2)
-            dma_two = iv;
-        else if(iv.size() == 1)
-            ++dma_singletons;
-    }
-    ASSERT_EQ(dma_two.size(), 2U);
-    ASSERT_EQ(dma_singletons, 1U);
-    ASSERT_TRUE(is_start_sorted(dma_two));
-    ASSERT_EQ(dma_two.front().start, 2100);
+    ASSERT_EQ(dma.size(), 1U);
+    auto dma_iv = m_reader->get_interval_track(dma.front()->id);
+    ASSERT_EQ(dma_iv.size(), 3U);
+    ASSERT_TRUE(is_start_sorted(dma_iv));
+    ASSERT_EQ(dma_iv.front().start, 2100);
 }
 
 TEST_F(reader_v3_edge_test, get_scalar_track_values_for_both_counters)
@@ -1441,8 +1452,9 @@ TEST_F(reader_v3_edge_test, get_track_stats_matches_slices_for_every_track_type)
 {
     // Hand-authored oracle: the 4-region cpu_thread track spans start 1000..end 6000+.
     // For every track, stats must equal MIN/MAX/COUNT over the exact interval/scalar
-    // slice — this covers cpu_thread, gpu_queue, dma (qs/q_only/s_only/neither NULL
-    // patterns) and counter in one pass, per synthesized track flavor.
+    // slice — this covers cpu_thread, gpu_queue, dma (here the "neither" variant:
+    // queue_id NULL + dst_agent_id NULL; the queue+agent "qa" variant is covered by the
+    // dma-by-agent fixture) and counter in one pass, per synthesized track flavor.
     auto tracks = m_reader->get_all_tracks();
 
     bool checked_cpu = false;
@@ -2001,6 +2013,84 @@ TEST_F(reader_v4_counter_test, v4_get_track_stats_bare_cpu_thread_is_empty)
     ASSERT_EQ(stats.count, 0U);
     ASSERT_FALSE(stats.min_ts.has_value());
     ASSERT_FALSE(stats.max_ts.has_value());
+}
+
+// v3 dma-by-destination-agent fixture: the crossed 2-agent x 2-stream x 12 = 48
+// memory_copy pattern (fixtures/rocpd_v3_dma_agent_data.sql) that proves dma tracks
+// partition by dst_agent_id, not stream_id -- the reproducible in-tree stand-in for
+// roc-optiq's rocpd-transpose.db.
+class reader_v3_dma_agent_test : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_storage = std::make_unique<profiler_hub::storage_t>(m_database_path, "");
+        m_reader  = std::make_shared<profiler_hub::reader_t>(std::move(m_storage));
+    }
+
+    void TearDown() override
+    {
+        m_reader.reset();
+        m_storage.reset();
+    }
+
+    std::string m_database_path{ ROCPD_DB_V3_DMA_AGENT_PATH };
+    std::unique_ptr<profiler_hub::storage_t> m_storage;
+    std::shared_ptr<profiler_hub::reader_t>  m_reader;
+};
+
+TEST_F(reader_v3_dma_agent_test, dma_tracks_partition_by_destination_agent)
+{
+    // The 48 memory copies fully cross two destination agents (id 1, 2) with two
+    // streams (12 events per agent/stream cell), all on one queue. Keyed by
+    // (nid,pid,queue_id,dst_agent_id) this MUST yield exactly 2 dma tracks -- one per
+    // destination agent, 24 events each -- matching Optiq's
+    // GetRocprofMemoryCopyTrackQuery by-agent swimlane grouping. The old stream-keyed
+    // identity would instead have given 2 tracks of 24 split BY STREAM, each spanning
+    // both agents: the exact inverse. This test pins the by-agent partition and guards
+    // against a regression back to by-stream.
+    auto tracks = m_reader->get_all_tracks();
+    auto dma    = find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma);
+    ASSERT_EQ(dma.size(), 2U);
+
+    std::set<size_t> track_agent_ids;
+    for(const auto& track : dma)
+    {
+        // Every dma track carries agent_info resolved from its dst_agent_id (stream_info
+        // is left null on dma tracks under the by-agent key).
+        ASSERT_NE(track->agent_info, nullptr)
+            << "dma track must resolve agent_info from dst_agent_id";
+        ASSERT_EQ(track->stream_info, nullptr)
+            << "dma track must not carry stream_info under the by-agent key";
+        track_agent_ids.insert(track->agent_info->id);
+
+        auto intervals = m_reader->get_interval_track(track->id);
+        ASSERT_EQ(intervals.size(), 24U)
+            << "each destination-agent track holds 24 copies (12 per stream)";
+
+        // Membership proof: every copy in this track targets the SAME destination agent
+        // as the track, and the track's copies span BOTH streams (proving the partition
+        // is by agent, not by stream). copyStreamX/copyStreamY name each copy's stream.
+        std::set<std::string> stream_names;
+        for(const auto& ev : intervals)
+        {
+            auto details = m_reader->get_memory_copy_details(ev.opaque_id);
+            ASSERT_TRUE(details.has_value());
+            ASSERT_NE(details->dst_agent_id, nullptr);
+            ASSERT_EQ(details->dst_agent_id->id, track->agent_info->id)
+                << "copy in a dma track must target that track's destination agent";
+            stream_names.insert(ev.display_name);
+        }
+        ASSERT_EQ(stream_names.size(), 2U) << "a destination-agent track must span both "
+                                              "streams (by-agent, not by-stream)";
+        ASSERT_TRUE(stream_names.count("copyStreamX") == 1);
+        ASSERT_TRUE(stream_names.count("copyStreamY") == 1);
+    }
+
+    // The two tracks resolve to the two distinct destination agents (id 1 and 2).
+    ASSERT_EQ(track_agent_ids.size(), 2U);
+    ASSERT_TRUE(track_agent_ids.count(1) == 1);
+    ASSERT_TRUE(track_agent_ids.count(2) == 1);
 }
 
 }  // namespace
