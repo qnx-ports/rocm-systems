@@ -1093,6 +1093,10 @@ TEST_F(reader_test, v3_counter_tracks_resolve_deterministic_pmc)
 
         // The fix attaches the deterministically-resolved pmc panel to each track...
         ASSERT_NE(t->pmc_info, nullptr) << "track " << t->id << " missing pmc_info";
+        // ...and (005B-4-fix-1-fix-2) exposes that pmc's numeric id on every counter
+        // track.
+        ASSERT_NE(t->pmc_info->pmc_id, 0U)
+            << "track " << t->id << " missing numeric pmc_id";
         ASSERT_EQ(t->pmc_info->name, exp.metric) << "track " << t->id;
         // ...and corrects the Q9 display name to that same pmc's name (previously the
         // arbitrary fanned name, wrong on 45 of 54 tracks).
@@ -1140,6 +1144,13 @@ TEST_F(reader_test, v3_scalar_value_query_strips_pmc_fanout)
         }
     }
     ASSERT_NE(gfx0, nullptr) << "device_busy_gfx [0] counter track not found";
+
+    // 005B-4-fix-1-fix-2: gfx0 is track 12 in this committed fixture; its exposed numeric
+    // pmc_id must be the resolver's rn=1 pick (pmc 1796), not 0 or a fanned-out
+    // neighbour.
+    EXPECT_EQ(gfx0->id, 12U);
+    ASSERT_NE(gfx0->pmc_info, nullptr);
+    EXPECT_EQ(gfx0->pmc_info->pmc_id, 1796U);
 
     auto samples = m_reader->get_scalar_track(gfx0->id);
     ASSERT_EQ(samples.size(), 16U)
@@ -2058,6 +2069,8 @@ TEST_F(reader_v4_counter_test, v4_counter_track_classified_named_and_agent_scope
     // still resolve to the GRBM_COUNT pmc, with name/agent consistent with the track.
     ASSERT_NE(counter->pmc_info, nullptr);
     ASSERT_EQ(counter->pmc_info->name, "GRBM_COUNT");
+    // 005B-4-fix-1-fix-2: numeric pmc_id exposed on pmc_info; GRBM_COUNT is pmc 1 here.
+    ASSERT_EQ(counter->pmc_info->pmc_id, 1U);
     ASSERT_EQ(counter->name, counter->pmc_info->name);
     ASSERT_NE(counter->pmc_info->agent_info, nullptr);
     ASSERT_EQ(counter->pmc_info->agent_info->agent_type, "GPU");
