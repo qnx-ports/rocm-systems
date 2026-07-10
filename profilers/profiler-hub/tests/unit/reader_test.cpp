@@ -1115,6 +1115,55 @@ TEST_F(reader_test, v3_counter_tracks_resolve_deterministic_pmc)
     ASSERT_EQ(resolved_identities.size(), 54U);
 }
 
+TEST_F(reader_test, v3_scalar_value_query_strips_pmc_fanout)
+{
+    // Regression: 005B-4-fix-3. 005B-4-fix-1-fix-1 fixed the counter *metadata* query so
+    // each track's name/pmc_info resolve to its own pmc. The four *value/detail* queries
+    // (scalar_track / scalar_stats / scalar_detail / pmc_event_detail) still used the
+    // naive sample->pmc_event join on the shared event_id, so a track's values were
+    // fanned out to ALL co-sampled pmcs under each poll. On tests/unit/rocpd.db the
+    // device_busy_gfx [0] track (16 samples) returned 96 scalar rows mixing six metrics.
+    // The resolved_pmc_join must collapse it back to exactly the track's own 16 samples.
+    auto tracks = m_reader->get_all_tracks();
+    auto counters =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
+
+    // Resolve the target track by its (metric, agent) identity, not a hard-coded id.
+    profiler_hub::reader_types::track_info_ptr_t gfx0;
+    for(const auto& t : counters)
+    {
+        if(t->pmc_info != nullptr && t->pmc_info->name == "device_busy_gfx" &&
+           t->pmc_info->agent_info != nullptr && t->pmc_info->agent_info->type_index == 0)
+        {
+            gfx0 = t;
+            break;
+        }
+    }
+    ASSERT_NE(gfx0, nullptr) << "device_busy_gfx [0] counter track not found";
+
+    auto samples = m_reader->get_scalar_track(gfx0->id);
+    ASSERT_EQ(samples.size(), 16U)
+        << "fan-out not stripped (expected 16, pre-fix was 96)";
+    ASSERT_TRUE(is_timestamp_sorted(samples));
+
+    // scalar_stats must agree with the de-fanned scalar_track slice (both now
+    // resolver-joined).
+    auto stats = m_reader->get_track_stats(gfx0->id);
+    expect_stats_match_scalars(stats, samples);
+    ASSERT_EQ(stats.count, 16U);
+
+    // Every sample's value is reproducible via get_scalar_details (scalar_detail, also
+    // resolver-joined) -- i.e. each opaque id resolves to the track's own single pmc
+    // value, not one of the six fanned metrics.
+    for(const auto& s : samples)
+    {
+        auto details = m_reader->get_scalar_details(s.opaque_id);
+        ASSERT_TRUE(details.has_value()) << "opaque id " << s.opaque_id;
+        ASSERT_DOUBLE_EQ(details->value, s.value);
+        ASSERT_EQ(details->sample.timestamp, s.timestamp);
+    }
+}
+
 TEST_F(reader_test, v3_get_interval_track_on_counter_returns_empty)
 {
     // Q7: an interval query against a counter (scalar-only) track returns empty.
