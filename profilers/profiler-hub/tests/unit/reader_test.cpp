@@ -7,9 +7,11 @@
 #include <gtest/gtest.h>
 
 #include <cstdio>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -1038,6 +1040,81 @@ TEST_F(reader_test, v3_counter_track_has_no_agent_info)
     ASSERT_EQ(counter->thread_info, nullptr);
 }
 
+TEST_F(reader_test, v3_counter_tracks_resolve_deterministic_pmc)
+{
+    // Regression: 005B-4-fix-1-fix-1. One AMD-SMI poll co-samples all of an agent's
+    // metrics under a single rocpd_sample.event_id, so a plain sample->pmc_event join
+    // on event_id fans each of the 54 counter tracks out to 6 candidate pmc_ids; a bare
+    // GROUP BY track_id then keeps an arbitrary one -- e.g. giving device_busy_mm [0]
+    // the device_busy_gfx pmc. Each track must instead resolve to the ONE pmc that
+    // matches its own metric identity, and its Q9 display name must be that pmc's name.
+    //
+    // Ground truth (verified against tests/unit/rocpd.db): rocpd_track.name_id encodes
+    // "<metric> [<ordinal>]" for the 48 device tracks -- the ordinal equals the GPU
+    // agent type_index -- and a bare "<metric>" for the 6 process tracks (CPU agent,
+    // type_index 0). Track ids are stable in this committed fixture.
+    struct expected_t
+    {
+        std::string metric;
+        std::string agent_type;
+        size_t      type_index;
+    };
+
+    std::map<size_t, expected_t> expected;
+    const char*                  device_metrics[] = { "device_busy_gfx", "device_busy_mm",
+                                                      "device_busy_umc", "device_memory_usage",
+                                                      "device_power",    "device_temp" };
+    const size_t                 device_bases[]   = { 12, 20, 28, 2084, 2092, 2100 };
+    for(size_t m = 0; m < 6; ++m)
+    {
+        for(size_t ord = 0; ord < 8; ++ord)
+        {
+            expected[device_bases[m] + ord] = expected_t{ device_metrics[m], "GPU", ord };
+        }
+    }
+    expected[2364] = { "process_context_switch", "CPU", 0 };
+    expected[2365] = { "process_kernel_cpu_time", "CPU", 0 };
+    expected[2366] = { "process_memory_hwm", "CPU", 0 };
+    expected[2367] = { "process_page_fault", "CPU", 0 };
+    expected[2368] = { "process_user_cpu_time", "CPU", 0 };
+    expected[2369] = { "process_virtual_memory", "CPU", 0 };
+
+    auto tracks = m_reader->get_all_tracks();
+    auto counters =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_EQ(counters.size(), 54U);
+
+    std::set<std::string> resolved_identities;
+    for(const auto& t : counters)
+    {
+        auto it = expected.find(t->id);
+        ASSERT_NE(it, expected.end()) << "unexpected counter track id " << t->id;
+        const auto& exp = it->second;
+
+        // The fix attaches the deterministically-resolved pmc panel to each track...
+        ASSERT_NE(t->pmc_info, nullptr) << "track " << t->id << " missing pmc_info";
+        ASSERT_EQ(t->pmc_info->name, exp.metric) << "track " << t->id;
+        // ...and corrects the Q9 display name to that same pmc's name (previously the
+        // arbitrary fanned name, wrong on 45 of 54 tracks).
+        ASSERT_EQ(t->name, t->pmc_info->name) << "track " << t->id;
+        // Agent scoping: the resolved pmc belongs to the agent the track name names.
+        ASSERT_NE(t->pmc_info->agent_info, nullptr) << "track " << t->id;
+        ASSERT_EQ(t->pmc_info->agent_info->agent_type, exp.agent_type)
+            << "track " << t->id;
+        ASSERT_EQ(t->pmc_info->agent_info->type_index, exp.type_index)
+            << "track " << t->id;
+
+        // Each resolved (metric, agent) identity must be unique across the 54 tracks --
+        // proves the true 1:1 track<->pmc mapping, not an arbitrary fan-out duplicate.
+        std::string identity = t->pmc_info->name + "/" +
+                               t->pmc_info->agent_info->agent_type + "/" +
+                               std::to_string(t->pmc_info->agent_info->type_index);
+        ASSERT_TRUE(resolved_identities.insert(identity).second)
+            << "duplicate resolved identity: " << identity;
+    }
+    ASSERT_EQ(resolved_identities.size(), 54U);
+}
+
 TEST_F(reader_test, v3_get_interval_track_on_counter_returns_empty)
 {
     // Q7: an interval query against a counter (scalar-only) track returns empty.
@@ -1926,6 +2003,16 @@ TEST_F(reader_v4_counter_test, v4_counter_track_classified_named_and_agent_scope
     // Q10: v4 counter track carries agent_info (its rocpd_track row has agent_id).
     ASSERT_NE(counter->agent_info, nullptr);
     ASSERT_NE(counter->thread_info, nullptr);
+
+    // v4.0 has one pmc per event (no event_id fan-out), so it is unaffected by the
+    // v3-only deterministic disambiguation (005B-4-fix-1-fix-1): the single track must
+    // still resolve to the GRBM_COUNT pmc, with name/agent consistent with the track.
+    ASSERT_NE(counter->pmc_info, nullptr);
+    ASSERT_EQ(counter->pmc_info->name, "GRBM_COUNT");
+    ASSERT_EQ(counter->name, counter->pmc_info->name);
+    ASSERT_NE(counter->pmc_info->agent_info, nullptr);
+    ASSERT_EQ(counter->pmc_info->agent_info->agent_type, "GPU");
+    ASSERT_EQ(counter->pmc_info->agent_info->type_index, 0U);
 }
 
 TEST_F(reader_v4_counter_test, v4_get_scalar_track_returns_timestamp_ordered_values)
