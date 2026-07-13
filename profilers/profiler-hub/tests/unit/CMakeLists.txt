@@ -203,6 +203,208 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_dma_agent_fixture)
 
+# Synthetic v3 flow-clique fixture, generated at build time from committed SQL
+# against the canonical v3 schema (same mechanism as the edge fixture above).
+# Encodes non-flat stack cliques so get_flows() emits region->region + same-type
+# sibling edges, with colliding endpoint ids that only the event_type tags
+# disambiguate. See fixtures/rocpd_v3_clique_data.sql for the flow oracle.
+set(_v3c_uuid "00000000000000000000000000c30003")
+set(_v3c_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3c_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_clique_data.sql)
+set(_v3c_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_clique_gen.sql)
+file(READ ${_v3c_schema_src} _v3c_schema)
+file(READ ${_v3c_data_src} _v3c_data)
+# Strip the trailing rocpd_metadata DML (double-quoted string literals the modern
+# sqlite3 CLI rejects in DML); the reader never reads metadata. See the edge block.
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3c_schema
+    "${_v3c_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3c_uuid}" _v3c_schema "${_v3c_schema}")
+string(REPLACE "{{guid}}" "${_v3c_uuid}" _v3c_schema "${_v3c_schema}")
+string(REPLACE "{{uuid}}" "_${_v3c_uuid}" _v3c_data "${_v3c_data}")
+string(REPLACE "{{guid}}" "${_v3c_uuid}" _v3c_data "${_v3c_data}")
+file(WRITE ${_v3c_gen_sql} "${_v3c_schema}\n${_v3c_data}\n")
+
+set(ROCPD_DB_V3_CLIQUE_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_clique.db)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_CLIQUE_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_CLIQUE_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_CLIQUE_PATH} ".read ${_v3c_gen_sql}"
+    DEPENDS ${_v3c_gen_sql} ${_v3c_schema_src} ${_v3c_data_src}
+    COMMENT "Generating synthetic v3 flow-clique test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_clique_fixture
+    DEPENDS ${ROCPD_DB_V3_CLIQUE_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_clique_fixture)
+
+# Synthetic v3 kernel_dispatch_pmc fixture, generated at build time from
+# committed SQL against the canonical v3 schema (same mechanism as the edge
+# fixture above). Encodes two PMC types across three kernel_dispatch rows so
+# both track discovery and get_interval_track() can be asserted on real values.
+set(_v3p_uuid "0000000000000000000000000b030003")
+set(_v3p_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3p_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_kd_pmc_data.sql)
+set(_v3p_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_kd_pmc_gen.sql)
+file(READ ${_v3p_schema_src} _v3p_schema)
+file(READ ${_v3p_data_src} _v3p_data)
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3p_schema
+    "${_v3p_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3p_uuid}" _v3p_schema "${_v3p_schema}")
+string(REPLACE "{{guid}}" "${_v3p_uuid}" _v3p_schema "${_v3p_schema}")
+string(REPLACE "{{uuid}}" "_${_v3p_uuid}" _v3p_data "${_v3p_data}")
+string(REPLACE "{{guid}}" "${_v3p_uuid}" _v3p_data "${_v3p_data}")
+file(WRITE ${_v3p_gen_sql} "${_v3p_schema}\n${_v3p_data}\n")
+
+set(ROCPD_DB_V3_KD_PMC_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_kd_pmc.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_KD_PMC_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_KD_PMC_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_KD_PMC_PATH}
+        ".read ${_v3p_gen_sql}"
+    DEPENDS ${_v3p_gen_sql} ${_v3p_schema_src} ${_v3p_data_src}
+    COMMENT "Generating synthetic v3 kernel_dispatch_pmc test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_kd_pmc_fixture
+    DEPENDS ${ROCPD_DB_V3_KD_PMC_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_kd_pmc_fixture)
+
+# Synthetic v4.0 kernel_dispatch_pmc fixture, generated at build time from
+# committed SQL against the canonical v4.0 schema. Mirrors the v3 fixture
+# data shape so both backends can be regression-tested on the same assertions.
+set(_v4p_uuid "0000000000000000000000000b040004")
+set(_v4p_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_kd_pmc_data.sql)
+set(_v4p_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v4_kd_pmc_gen.sql)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql _v4p_schema)
+file(READ ${_v4p_data_src} _v4p_data)
+string(REPLACE "{{uuid}}" "_${_v4p_uuid}" _v4p_schema "${_v4p_schema}")
+string(REPLACE "{{guid}}" "${_v4p_uuid}" _v4p_schema "${_v4p_schema}")
+string(REPLACE "{{uuid}}" "_${_v4p_uuid}" _v4p_data "${_v4p_data}")
+string(REPLACE "{{guid}}" "${_v4p_uuid}" _v4p_data "${_v4p_data}")
+file(WRITE ${_v4p_gen_sql} "${_v4p_schema}\n${_v4p_data}\n")
+
+set(ROCPD_DB_V4_KD_PMC_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v4_kd_pmc.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V4_KD_PMC_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V4_KD_PMC_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V4_KD_PMC_PATH}
+        ".read ${_v4p_gen_sql}"
+    DEPENDS ${_v4p_gen_sql}
+            ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql
+            ${_v4p_data_src}
+    COMMENT "Generating synthetic v4.0 kernel_dispatch_pmc test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v4_kd_pmc_fixture
+    DEPENDS ${ROCPD_DB_V4_KD_PMC_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v4_kd_pmc_fixture)
+
+# Synthetic v3 memory_activity fixture (task 012B).
+set(_v3ma_uuid "0000000000000000000000000c010001")
+set(_v3ma_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3ma_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_mem_activity_data.sql)
+set(_v3ma_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_mem_activity_gen.sql)
+file(READ ${_v3ma_schema_src} _v3ma_schema)
+file(READ ${_v3ma_data_src} _v3ma_data)
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3ma_schema
+    "${_v3ma_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3ma_uuid}" _v3ma_schema "${_v3ma_schema}")
+string(REPLACE "{{guid}}" "${_v3ma_uuid}" _v3ma_schema "${_v3ma_schema}")
+string(REPLACE "{{uuid}}" "_${_v3ma_uuid}" _v3ma_data "${_v3ma_data}")
+string(REPLACE "{{guid}}" "${_v3ma_uuid}" _v3ma_data "${_v3ma_data}")
+file(WRITE ${_v3ma_gen_sql} "${_v3ma_schema}\n${_v3ma_data}\n")
+
+set(ROCPD_DB_V3_MEM_ACTIVITY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_mem_activity.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_MEM_ACTIVITY_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_MEM_ACTIVITY_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_MEM_ACTIVITY_PATH}
+        ".read ${_v3ma_gen_sql}"
+    DEPENDS ${_v3ma_gen_sql} ${_v3ma_schema_src} ${_v3ma_data_src}
+    COMMENT "Generating synthetic v3 memory_activity test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_mem_activity_fixture
+    DEPENDS ${ROCPD_DB_V3_MEM_ACTIVITY_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_mem_activity_fixture)
+
+# Synthetic v4.0 memory_activity fixture (task 012B).
+set(_v4ma_uuid "0000000000000000000000000c020002")
+set(_v4ma_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_mem_activity_data.sql)
+set(_v4ma_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v4_mem_activity_gen.sql)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql _v4ma_schema)
+file(READ ${_v4ma_data_src} _v4ma_data)
+string(REPLACE "{{uuid}}" "_${_v4ma_uuid}" _v4ma_schema "${_v4ma_schema}")
+string(REPLACE "{{guid}}" "${_v4ma_uuid}" _v4ma_schema "${_v4ma_schema}")
+string(REPLACE "{{uuid}}" "_${_v4ma_uuid}" _v4ma_data "${_v4ma_data}")
+string(REPLACE "{{guid}}" "${_v4ma_uuid}" _v4ma_data "${_v4ma_data}")
+file(WRITE ${_v4ma_gen_sql} "${_v4ma_schema}\n${_v4ma_data}\n")
+
+set(ROCPD_DB_V4_MEM_ACTIVITY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v4_mem_activity.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V4_MEM_ACTIVITY_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V4_MEM_ACTIVITY_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V4_MEM_ACTIVITY_PATH}
+        ".read ${_v4ma_gen_sql}"
+    DEPENDS ${_v4ma_gen_sql}
+            ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql
+            ${_v4ma_data_src}
+    COMMENT "Generating synthetic v4.0 memory_activity test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v4_mem_activity_fixture
+    DEPENDS ${ROCPD_DB_V4_MEM_ACTIVITY_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v4_mem_activity_fixture)
+
 target_compile_definitions(
     profiler-hub_unit_tests
     PUBLIC
@@ -211,6 +413,11 @@ target_compile_definitions(
         ROCPD_DB_V4_COUNTER_PATH="${ROCPD_DB_V4_COUNTER_PATH}"
         ROCPD_DB_V3_EDGE_PATH="${ROCPD_DB_V3_EDGE_PATH}"
         ROCPD_DB_V3_DMA_AGENT_PATH="${ROCPD_DB_V3_DMA_AGENT_PATH}"
+        ROCPD_DB_V3_CLIQUE_PATH="${ROCPD_DB_V3_CLIQUE_PATH}"
+        ROCPD_DB_V3_KD_PMC_PATH="${ROCPD_DB_V3_KD_PMC_PATH}"
+        ROCPD_DB_V4_KD_PMC_PATH="${ROCPD_DB_V4_KD_PMC_PATH}"
+        ROCPD_DB_V3_MEM_ACTIVITY_PATH="${ROCPD_DB_V3_MEM_ACTIVITY_PATH}"
+        ROCPD_DB_V4_MEM_ACTIVITY_PATH="${ROCPD_DB_V4_MEM_ACTIVITY_PATH}"
 )
 
 target_include_directories(
