@@ -1683,6 +1683,20 @@ TEST_F(reader_v3_edge_test, get_track_stats_matches_slices_for_every_track_type)
         auto intervals = m_reader->get_interval_track(t->id);
         expect_stats_match_intervals(m_reader->get_track_stats(t->id), intervals);
     }
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory))
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        expect_stats_match_intervals(m_reader->get_track_stats(t->id), intervals);
+    }
+
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory_activity))
+    {
+        auto samples = m_reader->get_scalar_track(t->id);
+        expect_stats_match_scalars(m_reader->get_track_stats(t->id), samples);
+    }
 }
 
 TEST_F(reader_v3_edge_test, get_interval_track_stream_aggregates_three_op_kinds)
@@ -1753,6 +1767,88 @@ TEST_F(reader_v3_edge_test, get_interval_track_stream_aggregates_three_op_kinds)
 
     expect_stats_match_intervals(m_reader->get_track_stats(s1->id), iv1);
     expect_stats_match_intervals(m_reader->get_track_stats(s2->id), iv2);
+}
+
+TEST_F(reader_v3_edge_test, get_interval_track_stream_memalloc_event_carries_category)
+{
+    // 005B-2-fix-1 flagged gap: the memory_allocate UNION leg in the stream SQL carries
+    // the category LEFT JOIN (same pattern as kd/mc legs) but no committed fixture
+    // previously asserted a category value on a memalloc-in-stream event. The edge
+    // fixture's sole memory_allocate row (ma1, event_id=7) has no category_id set, so
+    // the resolved category must be an empty string — asserting that proves the
+    // structural LEFT JOIN is executed correctly without silent breakage.
+    using profiler_hub::reader_types::event_type_t;
+    auto tracks  = m_reader->get_all_tracks();
+    auto streams = find_tracks(tracks, profiler_hub::reader_types::track_type_t::stream);
+
+    profiler_hub::reader_types::track_info_ptr_t s1;
+    for(const auto& s : streams)
+    {
+        if(s->stream_info && s->stream_info->stream_id == 1) s1 = s;
+    }
+    ASSERT_NE(s1, nullptr);
+
+    auto iv = m_reader->get_interval_track(s1->id);
+    ASSERT_EQ(iv.size(), 6U);
+
+    bool found_ma = false;
+    for(const auto& ev : iv)
+    {
+        if(ev.op_kind.has_value() && ev.op_kind.value() == event_type_t::memory_allocate)
+        {
+            // event_id=7 has no category_id in the edge fixture -> LEFT JOIN yields NULL
+            // -> category resolves to empty string (not a missing field, not a crash).
+            EXPECT_EQ(ev.category, "");
+            found_ma = true;
+        }
+    }
+    EXPECT_TRUE(found_ma) << "stream 1 must contain at least one memory_allocate event";
+}
+
+TEST_F(reader_v3_edge_test, get_interval_track_memory_type_interval_and_identity)
+{
+    // task 009 added track_type_t::memory for rocpd_memory_allocate rows keyed by
+    // (nid, agent_id, queue_id, pid). The edge fixture has one such row:
+    //   (id=1, nid=1, pid=1, agent_id=1, type='ALLOC', start=6100, end=6200, size=4096,
+    //    queue_id=NULL, stream_id=1, event_id=7).
+    // This exercises the "a_only" variant (agent_id set, queue_id NULL).
+    // No test previously called get_interval_track() on a memory track; this is the
+    // gap identified by the task-007 audit.
+    auto tracks  = m_reader->get_all_tracks();
+    auto mem_trk = find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory);
+    ASSERT_EQ(mem_trk.size(), 1U);
+
+    const auto& t = mem_trk.front();
+    // agent_info must be populated (agent_id=1); queue_info null (queue_id IS NULL).
+    ASSERT_NE(t->agent_info, nullptr);
+    EXPECT_EQ(t->agent_info->id, 1U);
+    EXPECT_EQ(t->queue_info, nullptr);
+
+    auto intervals = m_reader->get_interval_track(t->id);
+    ASSERT_EQ(intervals.size(), 1U);
+    EXPECT_EQ(intervals.front().start, 6100U);
+    EXPECT_EQ(intervals.front().end, 6200U);
+
+    // opaque_id must resolve through get_memory_alloc_details().
+    auto details = m_reader->get_memory_alloc_details(intervals.front().opaque_id);
+    ASSERT_TRUE(details.has_value());
+    EXPECT_EQ(details->start_timestamp, 6100U);
+    EXPECT_EQ(details->end_timestamp, 6200U);
+    EXPECT_EQ(details->size, 4096U);
+    EXPECT_EQ(details->type, "ALLOC");
+}
+
+TEST_F(reader_v3_edge_test, get_track_stats_memory_type_matches_interval_slice)
+{
+    // get_track_stats() must return the same count/min/max as the interval slice for
+    // the memory track — not previously covered (gap from task-007 audit).
+    auto tracks  = m_reader->get_all_tracks();
+    auto mem_trk = find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory);
+    ASSERT_EQ(mem_trk.size(), 1U);
+
+    auto intervals = m_reader->get_interval_track(mem_trk.front()->id);
+    expect_stats_match_intervals(m_reader->get_track_stats(mem_trk.front()->id),
+                                 intervals);
 }
 
 // ============================================================================
