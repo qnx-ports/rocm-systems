@@ -405,6 +405,85 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v4_mem_activity_fixture)
 
+# Synthetic v3 ambiguous-pmc fixture (task 014): one ambiguous pmc_id (2 rows per
+# event_id) and one clean pmc_id, so both branches of pmc_info_t::ambiguous can
+# be asserted on the v3 backend.
+set(_v3ap_uuid "0000000000000000000000000a014003")
+set(_v3ap_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3ap_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_amb_pmc_data.sql)
+set(_v3ap_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_amb_pmc_gen.sql)
+file(READ ${_v3ap_schema_src} _v3ap_schema)
+file(READ ${_v3ap_data_src} _v3ap_data)
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3ap_schema
+    "${_v3ap_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3ap_uuid}" _v3ap_schema "${_v3ap_schema}")
+string(REPLACE "{{guid}}" "${_v3ap_uuid}" _v3ap_schema "${_v3ap_schema}")
+string(REPLACE "{{uuid}}" "_${_v3ap_uuid}" _v3ap_data "${_v3ap_data}")
+string(REPLACE "{{guid}}" "${_v3ap_uuid}" _v3ap_data "${_v3ap_data}")
+file(WRITE ${_v3ap_gen_sql} "${_v3ap_schema}\n${_v3ap_data}\n")
+
+set(ROCPD_DB_V3_AMB_PMC_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_amb_pmc.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_AMB_PMC_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_AMB_PMC_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_AMB_PMC_PATH}
+        ".read ${_v3ap_gen_sql}"
+    DEPENDS ${_v3ap_gen_sql} ${_v3ap_schema_src} ${_v3ap_data_src}
+    COMMENT "Generating synthetic v3 ambiguous-pmc test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_amb_pmc_fixture
+    DEPENDS ${ROCPD_DB_V3_AMB_PMC_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_amb_pmc_fixture)
+
+# Synthetic v4.0 ambiguous-pmc fixture (task 014): mirrors the v3 fixture shape
+# on the v4 backend (rocpd_timestamp spine present for backend detection).
+set(_v4ap_uuid "0000000000000000000000000a014004")
+set(_v4ap_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_amb_pmc_data.sql)
+set(_v4ap_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v4_amb_pmc_gen.sql)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql _v4ap_schema)
+file(READ ${_v4ap_data_src} _v4ap_data)
+string(REPLACE "{{uuid}}" "_${_v4ap_uuid}" _v4ap_schema "${_v4ap_schema}")
+string(REPLACE "{{guid}}" "${_v4ap_uuid}" _v4ap_schema "${_v4ap_schema}")
+string(REPLACE "{{uuid}}" "_${_v4ap_uuid}" _v4ap_data "${_v4ap_data}")
+string(REPLACE "{{guid}}" "${_v4ap_uuid}" _v4ap_data "${_v4ap_data}")
+file(WRITE ${_v4ap_gen_sql} "${_v4ap_schema}\n${_v4ap_data}\n")
+
+set(ROCPD_DB_V4_AMB_PMC_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v4_amb_pmc.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V4_AMB_PMC_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V4_AMB_PMC_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V4_AMB_PMC_PATH}
+        ".read ${_v4ap_gen_sql}"
+    DEPENDS ${_v4ap_gen_sql}
+            ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql
+            ${_v4ap_data_src}
+    COMMENT "Generating synthetic v4.0 ambiguous-pmc test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v4_amb_pmc_fixture
+    DEPENDS ${ROCPD_DB_V4_AMB_PMC_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v4_amb_pmc_fixture)
+
 target_compile_definitions(
     profiler-hub_unit_tests
     PUBLIC
@@ -418,6 +497,8 @@ target_compile_definitions(
         ROCPD_DB_V4_KD_PMC_PATH="${ROCPD_DB_V4_KD_PMC_PATH}"
         ROCPD_DB_V3_MEM_ACTIVITY_PATH="${ROCPD_DB_V3_MEM_ACTIVITY_PATH}"
         ROCPD_DB_V4_MEM_ACTIVITY_PATH="${ROCPD_DB_V4_MEM_ACTIVITY_PATH}"
+        ROCPD_DB_V3_AMB_PMC_PATH="${ROCPD_DB_V3_AMB_PMC_PATH}"
+        ROCPD_DB_V4_AMB_PMC_PATH="${ROCPD_DB_V4_AMB_PMC_PATH}"
 )
 
 target_include_directories(
