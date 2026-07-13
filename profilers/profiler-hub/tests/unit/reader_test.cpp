@@ -1378,28 +1378,21 @@ protected:
 TEST_F(reader_v3_edge_test, track_matrix_counts_by_type)
 {
     // cpu_thread/region tracks are synthesized from rocpd_region, not rocpd_track.
-    // rocpd_track contributes only its 3 PMC-backed sampled (counter) rows (2, 3, 6);
+    // rocpd_track contributes 4 PMC-backed sampled (counter) rows (2, 3, 6, 8);
     // the non-counter rows (1, 4, 5) are ignored, and track 7 -- sampled but with NO
     // rocpd_pmc_event -- is NOT a counter (see counter_discovery_excludes_non_pmc_sample
-    // below), so total stays 10. Synthesis adds 1 cpu_thread (the sole
-    // (1,1,1) thread, all regions main), 2 gpu_queue, 1 dma, and 2 stream (distinct
-    // stream_id 1 and 2 across the three event tables), and 1 memory (the sole
-    // rocpd_memory_allocate row keyed (nid=1, agent_id=1, queue_id=NULL, pid=1) =>
-    // the "a_only" variant) => 10 tracks total.
-    // dma is keyed by (nid,pid,queue_id,dst_agent_id): the three memory copies carry no
-    // dst_agent_id (all NULL) and share queue_id NULL, so they collapse to a single
-    // NULL-agent dma track -- exercising the "neither" interval variant and proving a
-    // NULL dst_agent_id is preserved as one distinct group (not dropped/coalesced away).
-    // (Stream-level separation of these copies still shows up on the 2 stream tracks.)
-    // Task 012B adds 1 memory_activity track (1 alloc row, agent_id=1) => total 11.
+    // below). Track 8 (pmc_id 99, empty PMC name) IS a counter -- discovery joins
+    // rocpd_pmc_event (present), not rocpd_info_pmc; it tests the display-name fallback.
+    // Synthesis adds 1 cpu_thread, 2 gpu_queue, 1 dma, 2 stream, 1 memory => 11 tracks.
+    // Task 012B adds 1 memory_activity (1 alloc row, agent_id=1) => total 12.
     auto tracks = m_reader->get_all_tracks();
-    ASSERT_EQ(tracks.size(), 11U);
+    ASSERT_EQ(tracks.size(), 12U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread).size(),
         1U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter).size(),
-        3U);
+        4U);
     ASSERT_EQ(
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue).size(),
         2U);
@@ -1429,12 +1422,13 @@ TEST_F(reader_v3_edge_test, counter_discovery_excludes_non_pmc_sample_track)
     auto tracks = m_reader->get_all_tracks();
     auto counters =
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
-    // Primary signal: only the 3 PMC-backed sample tracks (2, 3, 6) are counters. The
-    // old bare-DISTINCT discovery would have made track 7 a 4th (empty) counter.
-    ASSERT_EQ(counters.size(), 3U);
+    // Primary signal: only the 4 PMC-backed sample tracks (2, 3, 6, 8) are counters.
+    // Track 7 is excluded (has no rocpd_pmc_event); track 8 is included (pmc_event
+    // with pmc_id=99 -- the pmc row is absent from rocpd_info_pmc, but discovery
+    // only needs the pmc_event join, not the pmc metadata row).
+    ASSERT_EQ(counters.size(), 4U);
     // Corroborating signal: every counter is PMC-backed, so each resolves to a
-    // non-empty scalar track. The spurious non-PMC track would resolve to zero samples
-    // (its scalar value query joins rocpd_pmc_event and finds nothing).
+    // non-empty scalar track. The spurious non-PMC track 7 would resolve to zero samples.
     for(const auto& c : counters)
         ASSERT_FALSE(m_reader->get_scalar_track(c->id).empty())
             << "counter track " << c->id << " has no PMC-backed samples";
@@ -1450,10 +1444,11 @@ TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
     //   track 2: pid set, tid NULL -> process_info set,  thread_info NULL
     //   track 3: pid + tid set     -> process_info set,  thread_info SET
     //   track 6: pid NULL          -> process_info NULL, thread_info NULL
+    //   track 8: pid set, tid NULL -> process_info set,  thread_info NULL (fallback)
     auto tracks = m_reader->get_all_tracks();
     auto counters =
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
-    ASSERT_EQ(counters.size(), 3U);
+    ASSERT_EQ(counters.size(), 4U);
 
     int with_thread = 0, with_process = 0, without_process = 0;
     for(const auto& t : counters)
@@ -1466,9 +1461,9 @@ TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
     }
     // Exactly one counter track carries a resolved thread (tid set -- track 3).
     ASSERT_EQ(with_thread, 1);
-    // Exactly one carries no process (pid NULL -- track 6); the other two do.
+    // Exactly one carries no process (pid NULL -- track 6); tracks 2/3/8 do.
     ASSERT_EQ(without_process, 1);
-    ASSERT_EQ(with_process, 2);
+    ASSERT_EQ(with_process, 3);
 }
 
 TEST_F(reader_v3_edge_test, counter_thread_info_tracks_tid_agent_info_always_null)
@@ -1479,7 +1474,7 @@ TEST_F(reader_v3_edge_test, counter_thread_info_tracks_tid_agent_info_always_nul
     auto tracks = m_reader->get_all_tracks();
     auto counters =
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
-    ASSERT_EQ(counters.size(), 3U);
+    ASSERT_EQ(counters.size(), 4U);
 
     profiler_hub::reader_types::track_info_ptr_t no_tid_counter;    // GRBM_COUNT
     profiler_hub::reader_types::track_info_ptr_t with_tid_counter;  // SQ_WAVES
@@ -1502,6 +1497,51 @@ TEST_F(reader_v3_edge_test, counter_thread_info_tracks_tid_agent_info_always_nul
     // Branch 2: counter WITH tid -> thread_info populated (the case rocpd.db lacks).
     ASSERT_NE(with_tid_counter->thread_info, nullptr);
     ASSERT_EQ(with_tid_counter->agent_info, nullptr);
+}
+
+TEST_F(reader_v3_edge_test, counter_display_name_falls_back_to_track_name_on_pmc_miss)
+{
+    // F7 coverage: when the pmc_info lookup produces an empty name, the display name must
+    // fall back to rocpd_track.name rather than being empty, zero-initialized, or stale.
+    // Mechanism: reader_impl.cpp checks !nit->second.empty() before overwriting the name;
+    // if the PMC name in rocpd_info_pmc is "" the guard fires and rocpd_track.name stays.
+    // Track 8: rocpd_track.name_id=7 -> "FallbackCounter"; pmc_id=99 exists in
+    // rocpd_info_pmc with an intentionally empty name field.
+    auto tracks = m_reader->get_all_tracks();
+    auto counters =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
+
+    profiler_hub::reader_types::track_info_ptr_t fallback_counter;
+    for(const auto& c : counters)
+    {
+        if(c->name == "FallbackCounter")
+        {
+            fallback_counter = c;
+            break;
+        }
+    }
+    ASSERT_NE(fallback_counter, nullptr) << "fallback counter track not found";
+
+    // Primary assertion: display name equals rocpd_track.name (the fallback value).
+    ASSERT_EQ(fallback_counter->name, "FallbackCounter");
+    // Sanity: non-empty, not garbage.
+    ASSERT_FALSE(fallback_counter->name.empty());
+    // pmc_info: pmc_id=99 is in rocpd_info_pmc with empty name -> pmc_info IS attached
+    // but carries an empty name, which is exactly what triggers the fallback guard.
+    ASSERT_NE(fallback_counter->pmc_info, nullptr);
+    ASSERT_TRUE(fallback_counter->pmc_info->name.empty());
+    // Non-fallback path still intact: the 3 fully-resolved counters have non-empty names
+    // and their display name equals the PMC name (name != track->name only for fallback).
+    size_t with_pmc_name_match = 0;
+    for(const auto& c : counters)
+    {
+        if(c->pmc_info != nullptr && !c->pmc_info->name.empty())
+        {
+            ASSERT_EQ(c->name, c->pmc_info->name);
+            ++with_pmc_name_match;
+        }
+    }
+    ASSERT_EQ(with_pmc_name_match, 3U);
 }
 
 TEST_F(reader_v3_edge_test, get_interval_track_cpu_thread_regions_ordered)
@@ -1574,27 +1614,34 @@ TEST_F(reader_v3_edge_test, get_scalar_track_values_for_both_counters)
     for(const auto& c : counters)
     {
         auto samples = m_reader->get_scalar_track(c->id);
-        ASSERT_FALSE(samples.empty());
         ASSERT_TRUE(is_timestamp_sorted(samples));
 
         if(c->name == "GRBM_COUNT")
         {
             // 3 samples, ascending timestamp despite differing row-id order.
+            ASSERT_FALSE(samples.empty());
             ASSERT_EQ(samples.size(), 3U);
             ASSERT_EQ(samples.front().timestamp, 1000);
             ASSERT_DOUBLE_EQ(samples.front().value, 10.5);
+
+            auto details = m_reader->get_scalar_details(samples.front().opaque_id);
+            ASSERT_TRUE(details.has_value());
+            ASSERT_DOUBLE_EQ(details->value, samples.front().value);
         }
         else if(c->name == "SQ_WAVES")
         {
+            ASSERT_FALSE(samples.empty());
             ASSERT_EQ(samples.size(), 2U);
             ASSERT_EQ(samples.front().timestamp, 500);
             ASSERT_DOUBLE_EQ(samples.front().value, 5.0);
-        }
 
-        // Value is reproducible via get_scalar_details() on the opaque id.
-        auto details = m_reader->get_scalar_details(samples.front().opaque_id);
-        ASSERT_TRUE(details.has_value());
-        ASSERT_DOUBLE_EQ(details->value, samples.front().value);
+            auto details = m_reader->get_scalar_details(samples.front().opaque_id);
+            ASSERT_TRUE(details.has_value());
+            ASSERT_DOUBLE_EQ(details->value, samples.front().value);
+        }
+        // Track 8 ("FallbackCounter") has 1 sample with pmc_id=99 (empty name in
+        // rocpd_info_pmc); no specific assertions here — coverage in
+        // counter_display_name_falls_back_to_track_name_on_pmc_miss.
     }
 }
 
@@ -2377,6 +2424,42 @@ TEST_F(reader_v4_counter_test, v4_get_track_stats_bare_cpu_thread_is_empty)
     ASSERT_EQ(stats.count, 0U);
     ASSERT_FALSE(stats.min_ts.has_value());
     ASSERT_FALSE(stats.max_ts.has_value());
+}
+
+TEST_F(reader_v4_counter_test,
+       v4_counter_display_name_falls_back_to_track_name_on_pmc_miss)
+{
+    // F7 coverage (v4 backend): track 3 has rocpd_track.name_id=2 -> 'FallbackCounterV4';
+    // its pmc_event references pmc_id=99 which exists in rocpd_info_pmc with empty name.
+    // The empty-name guard (!nit->second.empty()) prevents it from overwriting
+    // rocpd_track.name -> display name falls back to "FallbackCounterV4".
+    auto tracks = m_reader->get_all_tracks();
+    auto counters =
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::counter);
+
+    profiler_hub::reader_types::track_info_ptr_t fallback_counter;
+    for(const auto& c : counters)
+    {
+        if(c->name == "FallbackCounterV4")
+        {
+            fallback_counter = c;
+            break;
+        }
+    }
+    ASSERT_NE(fallback_counter, nullptr) << "v4 fallback counter track not found";
+
+    // Primary assertion: display name equals rocpd_track.name (the fallback value).
+    ASSERT_EQ(fallback_counter->name, "FallbackCounterV4");
+    ASSERT_FALSE(fallback_counter->name.empty());
+    // pmc_info is attached (pmc_id=99 exists in rocpd_info_pmc) but carries empty name.
+    ASSERT_NE(fallback_counter->pmc_info, nullptr);
+    ASSERT_TRUE(fallback_counter->pmc_info->name.empty());
+    // Non-fallback path still intact: the GRBM_COUNT track carries pmc_info.
+    auto grbm =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(grbm, nullptr);
+    ASSERT_EQ(grbm->name, "GRBM_COUNT");
+    ASSERT_NE(grbm->pmc_info, nullptr);
 }
 
 // v3 dma-by-destination-agent fixture: the crossed 2-agent x 2-stream x 12 = 48
