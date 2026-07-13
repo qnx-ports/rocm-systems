@@ -484,6 +484,42 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v4_amb_pmc_fixture)
 
+# Synthetic v4.0 ambiguous-classification fixture (task 018): a single rocpd_track
+# row referenced by both rocpd_sample/rocpd_pmc_event (counter set) and
+# rocpd_memory_allocate (memory set), forcing the overlap condition in build_v4_tracks().
+set(_v4ac_uuid "0000000000000000000000000a018001")
+set(_v4ac_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_amb_cls_data.sql)
+set(_v4ac_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v4_amb_cls_gen.sql)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql _v4ac_schema)
+file(READ ${_v4ac_data_src} _v4ac_data)
+string(REPLACE "{{uuid}}" "_${_v4ac_uuid}" _v4ac_schema "${_v4ac_schema}")
+string(REPLACE "{{guid}}" "${_v4ac_uuid}" _v4ac_schema "${_v4ac_schema}")
+string(REPLACE "{{uuid}}" "_${_v4ac_uuid}" _v4ac_data "${_v4ac_data}")
+string(REPLACE "{{guid}}" "${_v4ac_uuid}" _v4ac_data "${_v4ac_data}")
+file(WRITE ${_v4ac_gen_sql} "${_v4ac_schema}\n${_v4ac_data}\n")
+
+set(ROCPD_DB_V4_AMB_CLS_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v4_amb_cls.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V4_AMB_CLS_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V4_AMB_CLS_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V4_AMB_CLS_PATH}
+        ".read ${_v4ac_gen_sql}"
+    DEPENDS ${_v4ac_gen_sql}
+            ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql
+            ${_v4ac_data_src}
+    COMMENT "Generating synthetic v4.0 ambiguous-classification test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v4_amb_cls_fixture
+    DEPENDS ${ROCPD_DB_V4_AMB_CLS_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v4_amb_cls_fixture)
+
 target_compile_definitions(
     profiler-hub_unit_tests
     PUBLIC
@@ -499,6 +535,7 @@ target_compile_definitions(
         ROCPD_DB_V4_MEM_ACTIVITY_PATH="${ROCPD_DB_V4_MEM_ACTIVITY_PATH}"
         ROCPD_DB_V3_AMB_PMC_PATH="${ROCPD_DB_V3_AMB_PMC_PATH}"
         ROCPD_DB_V4_AMB_PMC_PATH="${ROCPD_DB_V4_AMB_PMC_PATH}"
+        ROCPD_DB_V4_AMB_CLS_PATH="${ROCPD_DB_V4_AMB_CLS_PATH}"
 )
 
 target_include_directories(
