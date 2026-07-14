@@ -1907,6 +1907,11 @@ __device__ inline int IPCContext::tile_reduce_typed(
     return ROCSHMEM_ERROR;
   }
 
+  if (team_obj->num_pes > static_cast<int>(ROCSHMEM_REDUCE_SYNC_SIZE)) {
+    LOGD_WARN("Tile reduce team size exceeds IPC reduce_pSync capacity");
+    return ROCSHMEM_ERROR;
+  }
+
   long flag_val = 1;
   for (size_t segment_start = 0; segment_start < tile_elements;
        segment_start += segment_capacity, flag_val++) {
@@ -1959,6 +1964,11 @@ __device__ inline int IPCContext::tile_reduce_typed_wave(
 
   if (segment_capacity == 0) {
     LOGD_WARN("Tile reduce type exceeds IPC pWrk capacity");
+    return ROCSHMEM_ERROR;
+  }
+
+  if (team_obj->num_pes > static_cast<int>(ROCSHMEM_REDUCE_SYNC_SIZE)) {
+    LOGD_WARN("Tile reduce team size exceeds IPC reduce_pSync capacity");
     return ROCSHMEM_ERROR;
   }
 
@@ -2019,6 +2029,11 @@ __device__ inline int IPCContext::tile_reduce_typed_wg(
 
   if (segment_capacity == 0) {
     LOGD_WARN("Tile reduce type exceeds IPC pWrk capacity");
+    return ROCSHMEM_ERROR;
+  }
+
+  if (team_obj->num_pes > static_cast<int>(ROCSHMEM_REDUCE_SYNC_SIZE)) {
+    LOGD_WARN("Tile reduce team size exceeds IPC reduce_pSync capacity");
     return ROCSHMEM_ERROR;
   }
 
