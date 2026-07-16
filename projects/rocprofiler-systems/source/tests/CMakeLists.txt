@@ -35,15 +35,17 @@ list(
     $<$<TARGET_EXISTS:rocprofiler-sdk-backend-tests>:$<TARGET_OBJECTS:rocprofiler-sdk-backend-tests>>
 )
 set(_rocprofsys_have_sdk_pmc_tests FALSE)
+
 if(
     (ROCPROFSYS_ROCM_VERSION_MAJOR GREATER 6)
-    OR (
-        ROCPROFSYS_ROCM_VERSION_MAJOR EQUAL 6
-        AND ROCPROFSYS_ROCM_VERSION_MINOR GREATER_EQUAL 4
+    OR(
+    ROCPROFSYS_ROCM_VERSION_MAJOR EQUAL 6
+    AND ROCPROFSYS_ROCM_VERSION_MINOR GREATER_EQUAL 4
     )
 )
     set(_rocprofsys_have_sdk_pmc_tests TRUE)
 endif()
+
 list(
     APPEND UNIT_TEST_OBJECTS
     $<$<BOOL:${_rocprofsys_have_sdk_pmc_tests}>:$<TARGET_OBJECTS:pmc-sdk-pmc-collector-tests>>
@@ -54,12 +56,12 @@ add_executable(rocprof-sys-unit-tests ${UNIT_TEST_OBJECTS})
 target_link_libraries(
     rocprof-sys-unit-tests
     PRIVATE
-        rocprofiler-systems-googletest-library
-        rocprofiler-systems-common-library
-        rocprofiler-systems-core-library
-        rocprofiler-systems::rocprofiler-systems-binary
-        $<$<TARGET_EXISTS:rocprofiler-systems-bin-common>:rocprofiler-systems::rocprofiler-systems-bin-common>
-        rocprofiler-systems::rocprofiler-systems-interface-library
+    rocprofiler-systems-googletest-library
+    rocprofiler-systems-common-library
+    rocprofiler-systems-core-library
+    rocprofiler-systems::rocprofiler-systems-binary
+    $<$<TARGET_EXISTS:rocprofiler-systems-bin-common>:rocprofiler-systems::rocprofiler-systems-bin-common>
+    rocprofiler-systems::rocprofiler-systems-interface-library
 )
 
 target_include_directories(
@@ -71,6 +73,7 @@ target_include_directories(
 # It contains library.cpp whose static initializers instantiate thread_data /
 # thread_deleter, causing a TSan deadlock during atexit.
 get_target_property(_ut_libs rocprof-sys-unit-tests LINK_LIBRARIES)
+
 if(_ut_libs MATCHES "rocprofiler-systems-object-library")
     message(
         FATAL_ERROR
