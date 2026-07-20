@@ -4,8 +4,12 @@
 #include "profiler-hub/reader.hpp"
 #include "profiler-hub/storage.hpp"
 
+#include "interval_layout.hpp"
+
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -37,6 +41,14 @@ size_t
 row_id_of(const profiler_hub::reader_types::event_id_t& id)
 {
     return profiler_hub::reader_types::detail::event_id_access::row_id(id);
+}
+
+// Peek the underlying integer of an opaque flow_id_t. Test-only: the public API
+// treats flow_id_t as opaque (equality / ordering / hashing only).
+uint64_t
+flow_id_value(const profiler_hub::reader_types::flow_id_t& fid)
+{
+    return profiler_hub::reader_types::detail::flow_id_access::value(fid);
 }
 
 // Count how many of the four interval-detail accessors resolve a handle. A
@@ -1246,18 +1258,27 @@ TEST_F(reader_test, v3_get_flows_links_regions_to_gpu_events)
     // + 0 region->memory_allocate = 3 total (stack_id linkage). This capture is a
     // flat clique (each stack has one region + one GPU event), so the new
     // region->region / sibling categories add nothing here; only region sources.
+    using fk   = profiler_hub::reader_types::flow_kind_t;
     auto flows = m_reader->get_flows();
     ASSERT_EQ(flows.size(), 3);
     for(const auto& f : flows)
     {
-        // Endpoint type is now encoded in the opaque handle; a region source must
-        // resolve through get_region_details() and each dest through exactly one of the
-        // GPU-side detail accessors.
+        // Cross-type region->gpu edges are directed source->dest: the region resolves
+        // as source, the GPU event as dest. Endpoint type is encoded in the opaque
+        // handle; source resolves through get_region_details(), dest through exactly one
+        // GPU-side detail accessor.
         ASSERT_GT(row_id_of(f.source), 0U);
         ASSERT_GT(row_id_of(f.dest), 0U);
         ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
         ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        // flow_id is the (non-zero) source stack_id; kind is a cross-type region->gpu
+        // category (launch_to_dispatch for kernel_dispatch, copy_submit_to_exec for
+        // memory_copy/allocate). No same-type stream_dependency edges in this flat
+        // clique.
+        ASSERT_GT(flow_id_value(f.flow_id), 0U);
+        ASSERT_TRUE(f.kind == fk::launch_to_dispatch ||
+                    f.kind == fk::copy_submit_to_exec);
     }
 }
 
@@ -1678,6 +1699,7 @@ TEST_F(reader_v3_edge_test, get_flows_excludes_zero_and_null_stack_id)
     // (200), region<->memory_allocate (400) = 3 flows. RegionGamma (stack 0) and
     // the sample events (stack NULL) are excluded. Flat clique (one region + one
     // GPU event per stack) => region source, one GPU-type dest, no siblings.
+    using fk   = profiler_hub::reader_types::flow_kind_t;
     auto flows = m_reader->get_flows();
     ASSERT_EQ(flows.size(), 3U);
     for(const auto& f : flows)
@@ -1687,6 +1709,11 @@ TEST_F(reader_v3_edge_test, get_flows_excludes_zero_and_null_stack_id)
         ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
         ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        // Directed/typed: excluded stacks (0/NULL) never appear, so every flow_id is a
+        // non-zero source stack_id; kind is a cross-type region->gpu category.
+        ASSERT_GT(flow_id_value(f.flow_id), 0U);
+        ASSERT_TRUE(f.kind == fk::launch_to_dispatch ||
+                    f.kind == fk::copy_submit_to_exec);
     }
 }
 
@@ -1949,46 +1976,78 @@ protected:
     std::shared_ptr<profiler_hub::reader_t>  m_reader;
 };
 
-TEST_F(reader_v3_clique_test, get_flows_emits_full_clique_with_typed_endpoints)
+TEST_F(reader_v3_clique_test, get_flows_emits_directed_typed_clique)
 {
     using et         = profiler_hub::reader_types::event_type_t;
+    using fk         = profiler_hub::reader_types::flow_kind_t;
     using flow_key_t = std::pair<profiler_hub::reader_types::event_id_t,
                                  profiler_hub::reader_types::event_id_t>;
 
     auto flows = m_reader->get_flows();
-    ASSERT_EQ(flows.size(), 11U);
+    // Directed model: the 11 undirected pairs collapse to 7 directed edges. The 3
+    // cross-type region->gpu legs were already single-direction; the 4 same-type sets
+    // (region<->region, kd<->kd, mc<->mc, ma<->ma) each de-dup from two ordered pairs to
+    // one. This is the "half on symmetric pairs" property the directed model guarantees.
+    ASSERT_EQ(flows.size(), 7U);
 
-    std::multiset<flow_key_t> got;
+    struct edge_expect
+    {
+        fk       kind;
+        uint64_t flow_id;
+    };
+    std::map<flow_key_t, edge_expect> got;
     for(const auto& f : flows)
     {
-        got.emplace(f.source, f.dest);
+        got.emplace(flow_key_t{ f.source, f.dest },
+                    edge_expect{ f.kind, flow_id_value(f.flow_id) });
     }
 
-    // Exact by-construction oracle (see fixture header). The colliding endpoint ids
-    // (region 1 / kd 1 / mc 1 / ma 1) share raw per-type row ids across tables, so the
-    // minted opaque handles are equal ONLY when both the encoded type AND row id match.
-    // This is the whole point of the fix: the endpoints are distinguishable without any
-    // companion type tag.
-    const std::multiset<flow_key_t> expected{
-        { make_event_id(et::region, 1), make_event_id(et::kernel_dispatch, 1) },  // s1000
-        { make_event_id(et::region, 1), make_event_id(et::memory_copy, 1) },      // s1000
-        { make_event_id(et::region, 1), make_event_id(et::memory_allocate, 1) },  // s1000
-        { make_event_id(et::region, 2), make_event_id(et::region, 3) },           // s2000
-        { make_event_id(et::region, 3), make_event_id(et::region, 2) },           // s2000
-        { make_event_id(et::kernel_dispatch, 2),
-          make_event_id(et::kernel_dispatch, 3) },  // stack 3000
-        { make_event_id(et::kernel_dispatch, 3),
-          make_event_id(et::kernel_dispatch, 2) },                                 // 3000
-        { make_event_id(et::memory_copy, 2), make_event_id(et::memory_copy, 3) },  // 4000
-        { make_event_id(et::memory_copy, 3), make_event_id(et::memory_copy, 2) },  // 4000
-        { make_event_id(et::memory_allocate, 2), make_event_id(et::memory_allocate, 3) },
-        { make_event_id(et::memory_allocate, 3), make_event_id(et::memory_allocate, 2) },
+    // Exact directed oracle. parent_stack_id is NULL throughout the fixture, so lineage
+    // orientation never fires and every edge is oriented by ascending start-ts (earlier
+    // endpoint = source). flow_id == the shared source stack_id, so region 1's three
+    // cross-type legs all group under flow_id 1000. Colliding raw row ids (region 1 /
+    // kd 1 / mc 1 / ma 1) still mint to distinct handles via the encoded type tag.
+    using event_id_t = profiler_hub::reader_types::event_id_t;
+    auto expect_edge = [&](event_id_t s, event_id_t d, fk kind, uint64_t fid) {
+        auto it = got.find(flow_key_t{ s, d });
+        ASSERT_NE(it, got.end()) << "missing directed edge";
+        EXPECT_EQ(it->second.kind, kind);
+        EXPECT_EQ(it->second.flow_id, fid);
     };
-    ASSERT_EQ(got, expected);
+    // region 1 (start 1000) is earliest in its stack, so it sources all three gpu legs.
+    expect_edge(make_event_id(et::region, 1),
+                make_event_id(et::kernel_dispatch, 1),
+                fk::launch_to_dispatch,
+                1000);
+    expect_edge(make_event_id(et::region, 1),
+                make_event_id(et::memory_copy, 1),
+                fk::copy_submit_to_exec,
+                1000);
+    expect_edge(make_event_id(et::region, 1),
+                make_event_id(et::memory_allocate, 1),
+                fk::copy_submit_to_exec,
+                1000);
+    // Same-type sets: earlier-start endpoint sources the single surviving directed edge.
+    expect_edge(make_event_id(et::region, 2),  // start 2000 < region 3 start 2050
+                make_event_id(et::region, 3),
+                fk::generic,
+                2000);
+    expect_edge(make_event_id(et::kernel_dispatch, 2),  // 3000 < 3050
+                make_event_id(et::kernel_dispatch, 3),
+                fk::stream_dependency,
+                3000);
+    expect_edge(make_event_id(et::memory_copy, 2),  // 4000 < 4050
+                make_event_id(et::memory_copy, 3),
+                fk::stream_dependency,
+                4000);
+    expect_edge(make_event_id(et::memory_allocate, 2),  // 5000 < 5050
+                make_event_id(et::memory_allocate, 3),
+                fk::stream_dependency,
+                5000);
 
     // Handle-collision guard: region 1 / kernel_dispatch 1 / memory_copy 1 /
     // memory_allocate 1 all share raw row id 1 but come from different per-type tables.
-    // They MUST mint to four distinct handles (the identity leak this task closes).
+    // They MUST mint to four distinct handles (the identity leak task 028 closes).
     std::unordered_set<profiler_hub::reader_types::event_id_t> distinct{
         make_event_id(et::region, 1),
         make_event_id(et::kernel_dispatch, 1),
@@ -1996,6 +2055,218 @@ TEST_F(reader_v3_clique_test, get_flows_emits_full_clique_with_typed_endpoints)
         make_event_id(et::memory_allocate, 1)
     };
     ASSERT_EQ(distinct.size(), 4U);
+}
+
+TEST_F(reader_v3_clique_test, get_flows_dedups_symmetric_pairs_to_single_direction)
+{
+    // Direction / de-dup: for every surviving edge (a -> b), the reverse (b -> a) must
+    // NOT also be present. This is the core invariant of the directed model: each
+    // unordered clique pair yields exactly one edge.
+    auto flows = m_reader->get_flows();
+    std::set<std::pair<profiler_hub::reader_types::event_id_t,
+                       profiler_hub::reader_types::event_id_t>>
+        directed;
+    for(const auto& f : flows)
+        directed.emplace(f.source, f.dest);
+    ASSERT_EQ(directed.size(), flows.size());  // no duplicate directed edges
+    for(const auto& f : flows)
+    {
+        auto reverse = std::make_pair(f.dest, f.source);
+        EXPECT_EQ(directed.count(reverse), 0U)
+            << "both directions of a symmetric pair survived de-dup";
+    }
+}
+
+TEST_F(reader_v3_clique_test, get_flows_kind_matches_endpoint_types)
+{
+    using et     = profiler_hub::reader_types::event_type_t;
+    using fk     = profiler_hub::reader_types::flow_kind_t;
+    auto type_of = [](const profiler_hub::reader_types::event_id_t& id) {
+        return profiler_hub::reader_types::detail::event_id_access::type(id);
+    };
+    // Kind correctness: the flow_kind_t of every edge is a pure function of its ordered
+    // endpoint types, independent of which endpoint won orientation.
+    for(const auto& f : m_reader->get_flows())
+    {
+        const auto s = type_of(f.source);
+        const auto d = type_of(f.dest);
+        if(s == et::region && d == et::kernel_dispatch)
+            EXPECT_EQ(f.kind, fk::launch_to_dispatch);
+        else if(s == et::region && (d == et::memory_copy || d == et::memory_allocate))
+            EXPECT_EQ(f.kind, fk::copy_submit_to_exec);
+        else if(s == d && (s == et::kernel_dispatch || s == et::memory_copy ||
+                           s == et::memory_allocate))
+            EXPECT_EQ(f.kind, fk::stream_dependency);
+        else
+            EXPECT_EQ(f.kind, fk::generic);
+    }
+}
+
+TEST_F(reader_v3_clique_test, get_flows_for_chain_groups_by_flow_id)
+{
+    using et = profiler_hub::reader_types::event_type_t;
+    // flow_id grouping: region 1's stack (flow_id 1000) holds all three cross-type legs.
+    // get_flows_for_chain returns exactly that group, and sorting it by source start
+    // recovers linear order (all three share source region 1, so order is by dest start:
+    // kd1=1200 < mc1=1400 < ma1=1600).
+    auto                                  all = m_reader->get_flows();
+    profiler_hub::reader_types::flow_id_t chain_1000{};
+    for(const auto& f : all)
+        if(flow_id_value(f.flow_id) == 1000) chain_1000 = f.flow_id;
+    ASSERT_EQ(flow_id_value(chain_1000), 1000U);
+
+    auto chain = m_reader->get_flows_for_chain(chain_1000);
+    ASSERT_EQ(chain.size(), 3U);
+    for(const auto& f : chain)
+        EXPECT_EQ(flow_id_value(f.flow_id), 1000U);
+
+    // A flow_id that names no chain returns empty.
+    auto none = m_reader->get_flows_for_chain(
+        profiler_hub::reader_types::detail::flow_id_access::make(99));
+    EXPECT_TRUE(none.empty());
+
+    // Sorting the group by source start recovers a stable linear ordering.
+    std::sort(chain.begin(), chain.end(), [&](const auto& x, const auto& y) {
+        // all share the same source (region 1); tie-break by dest handle for determinism
+        return x.dest < y.dest;
+    });
+    EXPECT_EQ(
+        profiler_hub::reader_types::detail::event_id_access::type(chain.front().source),
+        et::region);
+}
+
+TEST_F(reader_v3_clique_test, get_flows_for_event_returns_adjacent_edges)
+{
+    using et = profiler_hub::reader_types::event_type_t;
+    // Adjacency: region 1 is the source of exactly its three cross-type legs and the dest
+    // of none, so get_flows_for_event(region 1) returns those 3.
+    const auto region1 = make_event_id(et::region, 1);
+    auto       adj     = m_reader->get_flows_for_event(region1);
+    ASSERT_EQ(adj.size(), 3U);
+    for(const auto& f : adj)
+        EXPECT_TRUE(f.source == region1 || f.dest == region1);
+
+    // kernel_dispatch 1 is a leaf dest (adjacent to exactly one edge).
+    auto kd1_adj = m_reader->get_flows_for_event(make_event_id(et::kernel_dispatch, 1));
+    ASSERT_EQ(kd1_adj.size(), 1U);
+    EXPECT_EQ(kd1_adj.front().dest, make_event_id(et::kernel_dispatch, 1));
+
+    // An event handle that participates in no edge returns empty.
+    auto none = m_reader->get_flows_for_event(make_event_id(et::region, 999));
+    EXPECT_TRUE(none.empty());
+}
+
+// get_flows_in_window: the viewport-scoped, decimated selector (task 033).
+// Oracle geometry from rocpd_v3_clique_data.sql — the 7 directed clique edges and
+// their [min(src.start,dst.start), max(src.end,dst.end)] extents / arrow-span
+// latencies (dst.start - src.end, clamped at 0):
+//   region1->kd1 : extent [1000,1300] latency 100  (fid 1000)
+//   region1->mc1 : extent [1000,1500] latency 300  (fid 1000)
+//   region1->ma1 : extent [1000,1700] latency 500  (fid 1000)
+//   region2->region3 : extent [2000,2150] latency 0 (fid 2000)
+//   kd2->kd3     : extent [3000,3150] latency 0     (fid 3000)
+//   mc2->mc3     : extent [4000,4150] latency 0     (fid 4000)
+//   ma2->ma3     : extent [5000,5150] latency 0     (fid 5000)
+
+TEST_F(reader_v3_clique_test,
+       get_flows_in_window_empty_window_and_tracks_equals_get_flows)
+{
+    // Criterion 7(b)/7(e): empty window + empty tracks + max_edges 0 is a pure pass-
+    // through of get_flows({}) — same edges, same source/dest/flow_id/kind, no cap.
+    auto all = m_reader->get_flows();
+    auto win = m_reader->get_flows_in_window({}, {}, 0);
+    ASSERT_EQ(win.size(), all.size());
+    ASSERT_EQ(win.size(), 7U);
+
+    std::map<std::pair<profiler_hub::reader_types::event_id_t,
+                       profiler_hub::reader_types::event_id_t>,
+             std::pair<uint64_t, profiler_hub::reader_types::flow_kind_t>>
+        oracle;
+    for(const auto& f : all)
+        oracle.emplace(std::make_pair(f.source, f.dest),
+                       std::make_pair(flow_id_value(f.flow_id), f.kind));
+    for(const auto& f : win)
+    {
+        auto it = oracle.find({ f.source, f.dest });
+        ASSERT_NE(it, oracle.end()) << "windowed edge not a member of get_flows({})";
+        EXPECT_EQ(it->second.first, flow_id_value(f.flow_id));
+        EXPECT_EQ(it->second.second, f.kind);
+    }
+}
+
+TEST_F(reader_v3_clique_test, get_flows_in_window_filters_by_extent)
+{
+    // Criterion 7(a): window overlap uses the edge extent, boundary-inclusive.
+    // [2000,5150] captures the four same-type sibling edges (extents start >= 2000);
+    // region1's three legs (ehi <= 1700 < 2000) fall out.
+    profiler_hub::reader_types::time_window_t inner;
+    inner.start = 2000;
+    inner.end   = 5150;
+    EXPECT_EQ(m_reader->get_flows_in_window({}, inner, 0).size(), 4U);
+
+    // Both boundaries inclusive: [1700,2000] touches region1->ma1 (ehi==1700) and
+    // region2->region3 (elo==2000) and nothing else.
+    profiler_hub::reader_types::time_window_t straddle;
+    straddle.start = 1700;
+    straddle.end   = 2000;
+    EXPECT_EQ(m_reader->get_flows_in_window({}, straddle, 0).size(), 2U);
+
+    // A window past every edge excludes all of them.
+    profiler_hub::reader_types::time_window_t outside;
+    outside.start = 6000;
+    EXPECT_TRUE(m_reader->get_flows_in_window({}, outside, 0).empty());
+}
+
+TEST_F(reader_v3_clique_test, get_flows_in_window_filters_by_track_membership)
+{
+    // Criterion 7(c): an edge is kept iff AT LEAST ONE endpoint sits on a listed track.
+    // The single cpu_thread track carries regions 1/2/3, so scoping to it keeps region1's
+    // three legs (source-only membership) plus region2->region3 (both endpoints), and
+    // drops the kd/mc/ma sibling edges (neither endpoint on a region track).
+    auto cpu = find_first_track(m_reader->get_all_tracks(),
+                                profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_NE(cpu, nullptr);
+    EXPECT_EQ(m_reader->get_flows_in_window({ cpu->id }, {}, 0).size(), 4U);
+
+    // Empty track list applies no filter.
+    EXPECT_EQ(m_reader->get_flows_in_window({}, {}, 0).size(), 7U);
+}
+
+TEST_F(reader_v3_clique_test, get_flows_in_window_decimates_by_latency_stably)
+{
+    // Criterion 7(d): cap to max_edges by descending arrow-span latency. region1's three
+    // legs have the only nonzero latencies (500 > 300 > 100), so max_edges 3 returns
+    // exactly those three; the four zero-latency sibling edges are dropped.
+    using et  = profiler_hub::reader_types::event_type_t;
+    auto top3 = m_reader->get_flows_in_window({}, {}, 3);
+    ASSERT_EQ(top3.size(), 3U);
+
+    std::set<std::pair<profiler_hub::reader_types::event_id_t,
+                       profiler_hub::reader_types::event_id_t>>
+        got;
+    for(const auto& f : top3)
+        got.emplace(f.source, f.dest);
+    const auto region1 = make_event_id(et::region, 1);
+    EXPECT_EQ(got.count({ region1, make_event_id(et::kernel_dispatch, 1) }), 1U);
+    EXPECT_EQ(got.count({ region1, make_event_id(et::memory_copy, 1) }), 1U);
+    EXPECT_EQ(got.count({ region1, make_event_id(et::memory_allocate, 1) }), 1U);
+
+    // Highest latency emitted first (region1->ma1, latency 500).
+    EXPECT_EQ(top3.front().source, region1);
+    EXPECT_EQ(top3.front().dest, make_event_id(et::memory_allocate, 1));
+
+    // Stable: an identical query yields an identical ordering across calls.
+    auto again = m_reader->get_flows_in_window({}, {}, 3);
+    ASSERT_EQ(again.size(), top3.size());
+    for(size_t i = 0; i < top3.size(); ++i)
+    {
+        EXPECT_EQ(again[i].source, top3[i].source);
+        EXPECT_EQ(again[i].dest, top3[i].dest);
+    }
+
+    // max_edges 0 is uncapped; a cap at/above the set size is a no-op.
+    EXPECT_EQ(m_reader->get_flows_in_window({}, {}, 0).size(), 7U);
+    EXPECT_EQ(m_reader->get_flows_in_window({}, {}, 99).size(), 7U);
 }
 
 // ============================================================================
@@ -2214,6 +2485,7 @@ TEST_F(reader_v4_test, v4_get_flows_links_regions_to_gpu_events)
     // v4 fixture flows: 20 region->kernel_dispatch + 2 region->memory_copy = 22.
     // Flat clique, so the new categories add nothing; this asserts type-tag parity
     // with the v3 backend (every source is a region; dest is a GPU-side type).
+    using fk   = profiler_hub::reader_types::flow_kind_t;
     auto flows = m_reader->get_flows();
     ASSERT_EQ(flows.size(), 22);
     for(const auto& f : flows)
@@ -2223,6 +2495,11 @@ TEST_F(reader_v4_test, v4_get_flows_links_regions_to_gpu_events)
         ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
         ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        // Directed/typed parity with v3: non-zero source stack_id as flow_id, cross-type
+        // region->gpu kind.
+        ASSERT_GT(flow_id_value(f.flow_id), 0U);
+        ASSERT_TRUE(f.kind == fk::launch_to_dispatch ||
+                    f.kind == fk::copy_submit_to_exec);
     }
 }
 
@@ -3296,6 +3573,141 @@ TEST_F(reader_v4_amb_cls_test, v4_non_ambiguous_track_not_flagged)
     {
         EXPECT_FALSE(t->ambiguous_classification)
             << "unexpected ambiguous_classification on track id=" << t->id;
+    }
+}
+
+// --------------------------------------------------------------------------
+// compute_interval_layout — pure layout algorithm (task 031).
+// Tested directly with exact coordinates so lane packing, containment, and the
+// stack-vs-lane split are verified without a fixture. Events carry only the
+// fields the algorithm reads/writes (id, start, end); ids are minted so the
+// containment parent handle can be asserted by identity.
+// --------------------------------------------------------------------------
+
+namespace
+{
+namespace rt = profiler_hub::reader_types;
+
+// Build one interval carrying a distinct handle keyed off `row` so a containment
+// parent can be asserted by handle equality.
+rt::interval_event_t
+make_interval(size_t row, rt::timestamp_ns_t start, rt::timestamp_ns_t end)
+{
+    rt::interval_event_t ev{};
+    ev.id    = make_event_id(rt::event_type_t::region, row);
+    ev.start = start;
+    ev.end   = end;
+    return ev;
+}
+
+// Find the event whose handle routes to `row` (order is not preserved by the
+// layout sort, so look up by identity rather than index).
+const rt::interval_event_t&
+by_row(const rt::interval_event_list_t& events, size_t row)
+{
+    for(const auto& ev : events)
+        if(row_id_of(ev.id) == row) return ev;
+    ADD_FAILURE() << "no event with row id " << row;
+    return events.front();
+}
+}  // namespace
+
+// Criterion 6: deeper-ancestor containment. A=[0,100] contains C=[50,90] even
+// though partial-overlap sibling B=[10,60] sits between them on the stack.
+TEST(interval_layout_test, stack_deeper_ancestor_containment)
+{
+    rt::interval_event_list_t events{
+        make_interval(1, 0, 100),  // A
+        make_interval(2, 10, 60),  // B
+        make_interval(3, 50, 90),  // C
+    };
+    profiler_hub::detail::compute_interval_layout(events, rt::nesting_model_t::stack);
+
+    const auto& a = by_row(events, 1);
+    const auto& b = by_row(events, 2);
+    const auto& c = by_row(events, 3);
+
+    EXPECT_FALSE(a.parent_id.has_value());
+    EXPECT_EQ(a.level, 0);
+
+    ASSERT_TRUE(b.parent_id.has_value());
+    EXPECT_EQ(*b.parent_id, a.id);  // B nested directly under A
+    EXPECT_EQ(b.level, 1);
+
+    ASSERT_TRUE(c.parent_id.has_value());
+    EXPECT_EQ(*c.parent_id, a.id);  // C is a child of A, NOT of partial-overlap B
+    EXPECT_EQ(c.level, 1);
+}
+
+// Criterion 6: partial overlap is not containment. B=[10,60], C=[50,90] overlap
+// but neither encloses the other -> both top-level, no parent.
+TEST(interval_layout_test, stack_partial_overlap_both_top_level)
+{
+    rt::interval_event_list_t events{
+        make_interval(2, 10, 60),  // B
+        make_interval(3, 50, 90),  // C
+    };
+    profiler_hub::detail::compute_interval_layout(events, rt::nesting_model_t::stack);
+
+    const auto& b = by_row(events, 2);
+    const auto& c = by_row(events, 3);
+
+    EXPECT_FALSE(b.parent_id.has_value());
+    EXPECT_EQ(b.level, 0);
+    EXPECT_FALSE(c.parent_id.has_value());
+    EXPECT_EQ(c.level, 0);
+}
+
+// Criterion 5 + 7: greedy lane packing over overlapping intervals; max_lane is
+// the returned peak concurrency. Three mutually overlapping bars need 3 lanes.
+TEST(interval_layout_test, lane_packing_peak_concurrency)
+{
+    rt::interval_event_list_t events{
+        make_interval(1, 0, 100),
+        make_interval(2, 10, 110),
+        make_interval(3, 20, 120),
+    };
+    const auto max_lane =
+        profiler_hub::detail::compute_interval_layout(events, rt::nesting_model_t::lane);
+
+    EXPECT_EQ(max_lane, 3u);
+    EXPECT_EQ(by_row(events, 1).lane, 0u);
+    EXPECT_EQ(by_row(events, 2).lane, 1u);
+    EXPECT_EQ(by_row(events, 3).lane, 2u);
+}
+
+// Criterion 5: a freed lane is reused. [0,10] then [20,30] are disjoint and both
+// pack into lane 0; the overlapping [5,25] takes lane 1. Peak concurrency = 2.
+TEST(interval_layout_test, lane_reuse_after_gap)
+{
+    rt::interval_event_list_t events{
+        make_interval(1, 0, 10),
+        make_interval(2, 5, 25),
+        make_interval(3, 20, 30),
+    };
+    const auto max_lane =
+        profiler_hub::detail::compute_interval_layout(events, rt::nesting_model_t::lane);
+
+    EXPECT_EQ(max_lane, 2u);
+    EXPECT_EQ(by_row(events, 1).lane, 0u);
+    EXPECT_EQ(by_row(events, 2).lane, 1u);
+    EXPECT_EQ(by_row(events, 3).lane, 0u);  // reuses lane 0 freed at ts 10
+}
+
+// Criterion 4: lane tracks never carry a containment parent even when one
+// interval fully encloses another; level mirrors the packing lane instead.
+TEST(interval_layout_test, lane_track_suppresses_parent)
+{
+    rt::interval_event_list_t events{
+        make_interval(1, 0, 100),  // fully contains the next
+        make_interval(2, 10, 60),
+    };
+    profiler_hub::detail::compute_interval_layout(events, rt::nesting_model_t::lane);
+
+    for(const auto& ev : events)
+    {
+        EXPECT_FALSE(ev.parent_id.has_value());
+        EXPECT_EQ(ev.level, static_cast<int>(ev.lane));  // level == lane on lane tracks
     }
 }
 
