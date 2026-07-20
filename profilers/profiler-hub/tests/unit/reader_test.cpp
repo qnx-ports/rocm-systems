@@ -2958,6 +2958,54 @@ TEST_F(reader_v3_kd_pmc_test, v3_kd_pmc_interval_track_count_and_order)
     ASSERT_EQ(grbm_intervals[0].end, 3100U);
 }
 
+TEST_F(reader_v3_kd_pmc_test, v3_kd_pmc_interval_resolves_as_kernel_dispatch)
+{
+    // Task 035: a kd_pmc interval event's row id is a rocpd_kernel_dispatch.id, so its
+    // handle must be typed kernel_dispatch and resolve through the KD detail path -- NOT
+    // the point pmc_event path (WHERE rocpd_pmc_event.id = ?), which keys a different
+    // table. Guard bites: revert interval_event_type_for(kernel_dispatch_pmc) to
+    // pmc_event and this test fails (handle mis-types + KD detail unreachable; the
+    // kd_pmc fixture has no rocpd_sample, so the point path resolves to nullopt).
+    auto tracks =
+        find_tracks(m_reader->get_all_tracks(),
+                    profiler_hub::reader_types::track_type_t::kernel_dispatch_pmc);
+    profiler_hub::reader_types::track_info_ptr_t sq_waves_track;
+    for(const auto& t : tracks)
+    {
+        ASSERT_NE(t->pmc_info, nullptr);
+        if(t->pmc_info->name == "SQ_WAVES") sq_waves_track = t;
+    }
+    ASSERT_NE(sq_waves_track, nullptr);
+
+    auto intervals = m_reader->get_interval_track(sq_waves_track->id);
+    ASSERT_FALSE(intervals.empty());
+    const auto& first = intervals.front();  // start=1000 -> kd row id 1
+
+    // The minted handle is typed kernel_dispatch, not pmc_event.
+    EXPECT_EQ(type_of(first.id),
+              profiler_hub::reader_types::event_type_t::kernel_dispatch);
+
+    auto detail = m_reader->get_event_detail(first.id);
+    ASSERT_TRUE(detail.has_value());
+    // Interval extent is present (kd_pmc is an interval track); a point pmc_event would
+    // leave te == nullopt.
+    EXPECT_EQ(detail->ts, 1000U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 1200U);
+
+    // kernel_dispatch properties are populated -> the KD detail path ran.
+    auto* dispatch_id = find_prop(*detail, "dispatch_id");
+    ASSERT_NE(dispatch_id, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*dispatch_id), 1U);
+    auto* wg_x = find_prop(*detail, "workgroup_size_x");
+    ASSERT_NE(wg_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*wg_x), 64U);
+    auto* grid_x = find_prop(*detail, "grid_size_x");
+    ASSERT_NE(grid_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*grid_x), 512U);
+    EXPECT_NE(find_prop(*detail, "kernel_symbol_id"), nullptr);
+}
+
 TEST_F(reader_v3_kd_pmc_test, v3_kd_pmc_track_stats_matches_interval_slice)
 {
     auto tracks =
@@ -3091,6 +3139,48 @@ TEST_F(reader_v4_kd_pmc_test, v4_kd_pmc_interval_track_count_and_order)
     ASSERT_EQ(grbm_intervals.size(), 1U);
     ASSERT_EQ(grbm_intervals[0].start, 3000U);
     ASSERT_EQ(grbm_intervals[0].end, 3100U);
+}
+
+TEST_F(reader_v4_kd_pmc_test, v4_kd_pmc_interval_resolves_as_kernel_dispatch)
+{
+    // Task 035 (v4 backend): same contract as the v3 test. The v4 kd_pmc interval SQL
+    // also SELECTs K.id (rocpd_kernel_dispatch.id), so the single-site fix in
+    // interval_event_type_for is backend-agnostic and routes this handle through the KD
+    // detail path with the interval extent (te) present.
+    auto tracks =
+        find_tracks(m_reader->get_all_tracks(),
+                    profiler_hub::reader_types::track_type_t::kernel_dispatch_pmc);
+    profiler_hub::reader_types::track_info_ptr_t sq_waves_track;
+    for(const auto& t : tracks)
+    {
+        ASSERT_NE(t->pmc_info, nullptr);
+        if(t->pmc_info->name == "SQ_WAVES") sq_waves_track = t;
+    }
+    ASSERT_NE(sq_waves_track, nullptr);
+
+    auto intervals = m_reader->get_interval_track(sq_waves_track->id);
+    ASSERT_FALSE(intervals.empty());
+    const auto& first = intervals.front();  // start=1000 -> kd row id 1
+
+    EXPECT_EQ(type_of(first.id),
+              profiler_hub::reader_types::event_type_t::kernel_dispatch);
+
+    auto detail = m_reader->get_event_detail(first.id);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->ts, 1000U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 1200U);
+
+    auto* dispatch_id = find_prop(*detail, "dispatch_id");
+    ASSERT_NE(dispatch_id, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*dispatch_id), 1U);
+    auto* wg_x = find_prop(*detail, "workgroup_size_x");
+    ASSERT_NE(wg_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*wg_x), 64U);
+    auto* grid_x = find_prop(*detail, "grid_size_x");
+    ASSERT_NE(grid_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*grid_x), 512U);
+    EXPECT_NE(find_prop(*detail, "kernel_symbol_id"), nullptr);
 }
 
 TEST_F(reader_v4_kd_pmc_test, v4_kd_pmc_track_stats_matches_interval_slice)
