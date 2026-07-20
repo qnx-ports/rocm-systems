@@ -17,6 +17,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace
@@ -28,7 +29,7 @@ namespace
 
 // Mint an opaque event handle. Production consumers never construct these -- they
 // receive them from the reader -- but the reader's own unit tests mint handles to
-// exercise the typed detail accessors and prove handle disambiguation.
+// exercise the unified get_event_detail path and prove handle disambiguation.
 profiler_hub::reader_types::event_id_t
 make_event_id(profiler_hub::reader_types::event_type_t type, size_t row_id)
 {
@@ -43,6 +44,24 @@ row_id_of(const profiler_hub::reader_types::event_id_t& id)
     return profiler_hub::reader_types::detail::event_id_access::row_id(id);
 }
 
+// Peek the event type an opaque handle routes to. Test-only: replaces the retired
+// type-probe idiom (trying each typed get_*_details accessor) now that the unified
+// get_event_detail resolves any type and no longer exposes it on the public surface.
+profiler_hub::reader_types::event_type_t
+type_of(const profiler_hub::reader_types::event_id_t& id)
+{
+    return profiler_hub::reader_types::detail::event_id_access::type(id);
+}
+
+// Look up a property in a unified event_detail_t bag by key (nullptr if absent).
+const profiler_hub::reader_types::arg_value_t*
+find_prop(const profiler_hub::reader_types::event_detail_t& d, const std::string& key)
+{
+    for(const auto& p : d.properties)
+        if(p.key == key) return &p.value;
+    return nullptr;
+}
+
 // Peek the underlying integer of an opaque flow_id_t. Test-only: the public API
 // treats flow_id_t as opaque (equality / ordering / hashing only).
 uint64_t
@@ -51,19 +70,15 @@ flow_id_value(const profiler_hub::reader_types::flow_id_t& fid)
     return profiler_hub::reader_types::detail::flow_id_access::value(fid);
 }
 
-// Count how many of the four interval-detail accessors resolve a handle. A
-// well-formed interval handle must resolve through exactly one; this replaces the
-// retired interval_event_t::op_kind tag as the disambiguation check.
+// 1 if a handle resolves to a unified detail record, else 0. A well-formed interval
+// handle resolves through the single get_event_detail path; this replaces the retired
+// four-typed-accessor disambiguation check (the unified API resolves any type via one
+// call, so "resolves through exactly one accessor" collapses to "resolves").
 int
 count_interval_resolutions(const profiler_hub::reader_t&                 r,
                            const profiler_hub::reader_types::event_id_t& id)
 {
-    int n = 0;
-    n += r.get_region_details(id).has_value() ? 1 : 0;
-    n += r.get_kernel_dispatch_details(id).has_value() ? 1 : 0;
-    n += r.get_memory_copy_details(id).has_value() ? 1 : 0;
-    n += r.get_memory_alloc_details(id).has_value() ? 1 : 0;
-    return n;
+    return r.get_event_detail(id).has_value() ? 1 : 0;
 }
 
 // First track of a given type, or nullptr. Tests use this instead of
@@ -532,184 +547,140 @@ TEST_F(reader_test, get_event_count_with_time_window_matches_filtered_events)
 // Event detail tests
 // ============================================================================
 
-TEST_F(reader_test, get_region_details_first_region_has_correct_values)
+// Mint a unified-detail handle from a filtered timeline event of the given type.
+static profiler_hub::reader_types::event_id_t
+first_handle_of(const profiler_hub::reader_t&            r,
+                profiler_hub::reader_types::event_type_t type)
 {
-    // First region in DB: id=1, start=23040314699996, end=23040314726875, name="mbind"
     profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::region };
+    filter.types      = { type };
     filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_region_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_EQ(details->start_timestamp, 23040314699996);
-    ASSERT_EQ(details->end_timestamp, 23040314726875);
-    ASSERT_EQ(details->name, "mbind");
+    auto events       = r.get_events(filter);
+    EXPECT_GE(events.size(), 1U);
+    return make_event_id(events[0].unique_identifier.type,
+                         events[0].unique_identifier.id);
 }
 
-TEST_F(reader_test, get_region_details_has_event_metadata)
+TEST_F(reader_test, get_event_detail_region_header_and_category)
 {
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::region };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_region_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_NE(details->event, nullptr);
-    // First region event_id=28 has category_id=3302 -> "numa"
-    ASSERT_EQ(details->event->event_category, "numa");
+    // First region: start=23040314699996, end=23040314726875, name="mbind", cat "numa".
+    auto detail = m_reader->get_event_detail(
+        first_handle_of(*m_reader, profiler_hub::reader_types::event_type_t::region));
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->name, "mbind");
+    EXPECT_EQ(detail->category, "numa");
+    EXPECT_EQ(detail->ts, 23040314699996U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 23040314726875U);
 }
 
-TEST_F(reader_test, get_region_details_returns_nullopt_for_wrong_type)
+TEST_F(reader_test, get_event_detail_kernel_dispatch_properties)
 {
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::kernel_dispatch };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
+    // Single kernel dispatch: dispatch_id=1, wg=256x1x1, grid=131072x1x1,
+    // node_id=9162464413581981795, pid=67979, kernel symbol resolvable.
+    auto detail = m_reader->get_event_detail(first_handle_of(
+        *m_reader, profiler_hub::reader_types::event_type_t::kernel_dispatch));
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->ts, 23040497580868U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 23040497591788U);
 
-    auto details = m_reader->get_region_details(events[0]);
-    ASSERT_FALSE(details.has_value());
+    auto* dispatch_id = find_prop(*detail, "dispatch_id");
+    ASSERT_NE(dispatch_id, nullptr);
+    ASSERT_TRUE(std::holds_alternative<uint64_t>(*dispatch_id));
+    EXPECT_EQ(std::get<uint64_t>(*dispatch_id), 1U);
+
+    auto* wg_x = find_prop(*detail, "workgroup_size_x");
+    ASSERT_NE(wg_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*wg_x), 256U);
+
+    auto* grid_x = find_prop(*detail, "grid_size_x");
+    ASSERT_NE(grid_x, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*grid_x), 131072U);
+
+    auto* node_id = find_prop(*detail, "node_id");
+    ASSERT_NE(node_id, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*node_id), 9162464413581981795ULL);
+
+    auto* process_id = find_prop(*detail, "process_id");
+    ASSERT_NE(process_id, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*process_id), 67979U);
+
+    // Linked entity collapsed to an integer id, not a resolved sub-struct.
+    EXPECT_NE(find_prop(*detail, "kernel_symbol_id"), nullptr);
 }
 
-TEST_F(reader_test, get_kernel_dispatch_details_has_correct_values)
+TEST_F(reader_test, get_event_detail_memory_copy_properties)
 {
-    // DB has 1 kernel dispatch: id=1, dispatch_id=1, wg=256x1x1, grid=131072x1x1
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::kernel_dispatch };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
+    // First memory copy: size=4000000, name=MEMORY_COPY_HOST_TO_DEVICE, agents
+    // resolvable.
+    auto detail = m_reader->get_event_detail(first_handle_of(
+        *m_reader, profiler_hub::reader_types::event_type_t::memory_copy));
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->name, "MEMORY_COPY_HOST_TO_DEVICE");
+    EXPECT_EQ(detail->ts, 23040496787705U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 23040496865705U);
 
-    auto details = m_reader->get_kernel_dispatch_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_EQ(details->dispatch_id, 1);
-    ASSERT_EQ(details->start_timestamp, 23040497580868);
-    ASSERT_EQ(details->end_timestamp, 23040497591788);
-    ASSERT_EQ(details->workgroup_size_x, 256);
-    ASSERT_EQ(details->workgroup_size_y, 1);
-    ASSERT_EQ(details->workgroup_size_z, 1);
-    ASSERT_EQ(details->grid_size_x, 131072);
-    ASSERT_EQ(details->grid_size_y, 1);
-    ASSERT_EQ(details->grid_size_z, 1);
+    auto* size = find_prop(*detail, "size");
+    ASSERT_NE(size, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*size), 4000000U);
+
+    EXPECT_NE(find_prop(*detail, "src_agent_id"), nullptr);
+    EXPECT_NE(find_prop(*detail, "dst_agent_id"), nullptr);
 }
 
-TEST_F(reader_test, get_kernel_dispatch_details_resolves_kernel_symbol)
+TEST_F(reader_test, get_event_detail_memory_allocate_properties)
 {
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::kernel_dispatch };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
+    // Inserted alloc: type=ALLOC, level=REAL, size=4096, address=1048576. No name field.
+    auto detail = m_reader->get_event_detail(first_handle_of(
+        *m_reader, profiler_hub::reader_types::event_type_t::memory_allocate));
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_TRUE(detail->name.empty());  // memory_allocate has no name field
+    EXPECT_EQ(detail->ts, 23040314700000U);
+    ASSERT_TRUE(detail->te.has_value());
+    EXPECT_EQ(detail->te.value(), 23040314710000U);
 
-    auto details = m_reader->get_kernel_dispatch_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    // kernel_id=11 -> display_name contains "bit_extract_kernel"
-    ASSERT_NE(details->kernel_symbol_info, nullptr);
-    EXPECT_NE(details->kernel_symbol_info->display_name.find("bit_extract_kernel"),
-              std::string::npos);
+    auto* type = find_prop(*detail, "type");
+    ASSERT_NE(type, nullptr);
+    ASSERT_TRUE(std::holds_alternative<std::string>(*type));
+    EXPECT_EQ(std::get<std::string>(*type), "ALLOC");
+
+    auto* level = find_prop(*detail, "level");
+    ASSERT_NE(level, nullptr);
+    EXPECT_EQ(std::get<std::string>(*level), "REAL");
+
+    auto* address = find_prop(*detail, "address");
+    ASSERT_NE(address, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*address), 1048576U);
+
+    auto* size = find_prop(*detail, "size");
+    ASSERT_NE(size, nullptr);
+    EXPECT_EQ(std::get<uint64_t>(*size), 4096U);
 }
 
-TEST_F(reader_test, get_kernel_dispatch_details_resolves_node_and_process)
+TEST_F(reader_test, get_event_detail_sample_is_point_event)
 {
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::kernel_dispatch };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
+    // A counter track's scalar samples are sample-typed handles: point events (no te).
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+    auto samples = m_reader->get_scalar_track(counter->id);
+    ASSERT_FALSE(samples.empty());
 
-    auto details = m_reader->get_kernel_dispatch_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_NE(details->node_info, nullptr);
-    ASSERT_EQ(details->node_info->node_id, 9162464413581981795);
-    ASSERT_NE(details->process_info, nullptr);
-    ASSERT_EQ(details->process_info->pid, 67979);
+    auto detail = m_reader->get_event_detail(samples.front().id);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->ts, samples.front().timestamp);
+    EXPECT_FALSE(detail->te.has_value());  // point event
 }
 
-TEST_F(reader_test, get_memory_copy_details_has_correct_values)
+TEST_F(reader_test, get_event_detail_returns_nullopt_for_invalid_handle)
 {
-    // DB has 2 memory copies. First: id=1, size=4000000, name=MEMORY_COPY_HOST_TO_DEVICE
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::memory_copy };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_memory_copy_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_EQ(details->start_timestamp, 23040496787705);
-    ASSERT_EQ(details->end_timestamp, 23040496865705);
-    ASSERT_EQ(details->size, 4000000);
-    ASSERT_EQ(details->name, "MEMORY_COPY_HOST_TO_DEVICE");
-}
-
-TEST_F(reader_test, get_memory_copy_details_resolves_agents)
-{
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::memory_copy };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_memory_copy_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    // dst_agent_id=3, src_agent_id=1
-    ASSERT_NE(details->dst_agent_id, nullptr);
-    ASSERT_NE(details->src_agent_id, nullptr);
-}
-
-TEST_F(reader_test, get_memory_alloc_details_has_correct_values)
-{
-    // Inserted test data: id=1, type=ALLOC, level=REAL, size=4096, address=1048576
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::memory_allocate };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_memory_alloc_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_EQ(details->type, "ALLOC");
-    ASSERT_EQ(details->level, "REAL");
-    ASSERT_EQ(details->start_timestamp, 23040314700000);
-    ASSERT_EQ(details->end_timestamp, 23040314710000);
-    ASSERT_TRUE(details->address.has_value());
-    ASSERT_EQ(details->address.value(), 1048576);
-    ASSERT_EQ(details->size, 4096);
-}
-
-TEST_F(reader_test, get_memory_alloc_details_has_event_with_call_stack)
-{
-    // The inserted memory_allocate event has call_stack JSON with hipMalloc
-    profiler_hub::reader_types::event_filter_t filter;
-    filter.types      = { profiler_hub::reader_types::event_type_t::memory_allocate };
-    filter.pagination = { 1, std::nullopt };
-    auto events       = m_reader->get_events(filter);
-    ASSERT_GE(events.size(), 1);
-
-    auto details = m_reader->get_memory_alloc_details(events[0]);
-    ASSERT_TRUE(details.has_value());
-    ASSERT_NE(details->event, nullptr);
-
-    // call_stack should be deserialized from JSON
-    ASSERT_FALSE(details->event->call_stack.empty());
-    ASSERT_TRUE(details->event->call_stack.front().program_counter.has_value());
-    ASSERT_EQ(details->event->call_stack.front().program_counter->function, "hipMalloc");
-    ASSERT_EQ(details->event->call_stack.front().program_counter->filename,
-              "/opt/rocm/hip/src/hip_memory.cpp");
-    ASSERT_TRUE(
-        details->event->call_stack.front().program_counter->line_number.has_value());
-    ASSERT_EQ(details->event->call_stack.front().program_counter->line_number.value(),
-              123);
-
-    // line_info should also be deserialized
-    ASSERT_FALSE(details->event->line_info_list.empty());
-    ASSERT_TRUE(details->event->line_info_list.front().program_counter.has_value());
-    ASSERT_EQ(details->event->line_info_list.front().program_counter->function,
-              "hipMalloc");
+    // A handle to a non-existent row resolves to nothing, not a throw.
+    auto detail = m_reader->get_event_detail(
+        make_event_id(profiler_hub::reader_types::event_type_t::region, 999999999));
+    EXPECT_FALSE(detail.has_value());
 }
 
 // ============================================================================
@@ -930,7 +901,7 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_ordered_values)
     ASSERT_EQ(first.end, 23040498732102);
     ASSERT_GE(first.end, first.start);
 
-    auto details = m_reader->get_region_details(first.id);
+    auto details = m_reader->get_event_detail(first.id);
     ASSERT_TRUE(details.has_value());
     ASSERT_EQ(details->name, "bit_extract");
 }
@@ -940,7 +911,7 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_carries_category)
     // Category is per-EVENT, not derivable from the track type or region kind: the
     // 59 regions on this one cpu_thread carry several distinct categories. The reader
     // resolves it via rocpd_string on the v3 backend; assert it round-trips against
-    // the authoritative get_region_details() -> event->event_category oracle.
+    // the authoritative get_event_detail() -> category oracle.
     auto tracks = m_reader->get_all_tracks();
     auto cpu_tracks =
         find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread);
@@ -968,10 +939,9 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_carries_category)
     std::set<std::string> seen;
     for(const auto& ev : region_intervals)
     {
-        auto details = m_reader->get_region_details(ev.id);
+        auto details = m_reader->get_event_detail(ev.id);
         ASSERT_TRUE(details.has_value());
-        ASSERT_NE(details->event, nullptr);
-        ASSERT_EQ(ev.category, details->event->event_category);
+        ASSERT_EQ(ev.category, details->category);
         seen.insert(ev.category);
     }
     ASSERT_GT(seen.size(), 1U) << "expected several distinct per-event categories";
@@ -1000,8 +970,8 @@ TEST_F(reader_test, v3_get_interval_track_gpu_queue_carries_category)
 {
     // gpu_queue kernel-dispatch intervals carry per-event category, resolved in-SQL
     // via rocpd_string on the v3 backend (LEFT JOIN, additive). Assert it round-trips
-    // against the authoritative get_kernel_dispatch_details() -> event->event_category
-    // oracle -- the same fidelity contract the region/stream interval tracks meet.
+    // against the authoritative get_event_detail() -> category oracle -- the same
+    // fidelity contract the region/stream interval tracks meet.
     auto tracks = m_reader->get_all_tracks();
     auto gpu =
         find_first_track(tracks, profiler_hub::reader_types::track_type_t::gpu_queue);
@@ -1014,18 +984,17 @@ TEST_F(reader_test, v3_get_interval_track_gpu_queue_carries_category)
     const auto& ev = intervals.front();
     ASSERT_EQ(ev.category, "rocm_kernel_dispatch");
 
-    auto details = m_reader->get_kernel_dispatch_details(ev.id);
+    auto details = m_reader->get_event_detail(ev.id);
     ASSERT_TRUE(details.has_value());
-    ASSERT_NE(details->event, nullptr);
-    ASSERT_EQ(ev.category, details->event->event_category);
+    ASSERT_EQ(ev.category, details->category);
 }
 
 TEST_F(reader_test, v3_get_interval_track_dma_carries_category)
 {
     // Standalone queue-keyed dma (memory-copy) intervals carry per-event category,
     // resolved in-SQL via rocpd_string on the v3 backend (LEFT JOIN, additive). Assert
-    // it round-trips against the authoritative get_memory_copy_details() ->
-    // event->event_category oracle -- the same fidelity contract region/gpu_queue meet.
+    // it round-trips against the authoritative get_event_detail() -> category oracle --
+    // the same fidelity contract region/gpu_queue meet.
     auto tracks = m_reader->get_all_tracks();
     auto dma    = find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma);
     // Fixture: 2 memory copies keyed by destination agent (queue_id=0, dst_agent_id 1 &
@@ -1041,10 +1010,9 @@ TEST_F(reader_test, v3_get_interval_track_dma_carries_category)
         for(const auto& ev : intervals)
         {
             ASSERT_EQ(ev.category, "rocm_memory_copy");
-            auto details = m_reader->get_memory_copy_details(ev.id);
+            auto details = m_reader->get_event_detail(ev.id);
             ASSERT_TRUE(details.has_value());
-            ASSERT_NE(details->event, nullptr);
-            ASSERT_EQ(ev.category, details->event->event_category);
+            ASSERT_EQ(ev.category, details->category);
         }
     }
     ASSERT_EQ(total, 2U);
@@ -1061,13 +1029,16 @@ TEST_F(reader_test, v3_get_scalar_track_counter_ordered_and_details)
     ASSERT_FALSE(samples.empty());
     ASSERT_TRUE(is_timestamp_sorted(samples));
 
-    // First sample's value is reproducible via get_scalar_details() on its handle.
+    // First sample's handle resolves via get_event_detail as a point event (te ==
+    // nullopt) whose ts matches the scalar timestamp; the counter value itself is carried
+    // directly on scalar_event_t::value (samples are point events with no scalar payload
+    // in detail).
     const auto& first   = samples.front();
-    auto        details = m_reader->get_scalar_details(first.id);
+    auto        details = m_reader->get_event_detail(first.id);
     ASSERT_TRUE(details.has_value());
-    ASSERT_DOUBLE_EQ(details->value, first.value);
-    ASSERT_EQ(details->sample.timestamp, first.timestamp);
-    ASSERT_NE(details->sample.track, nullptr);
+    ASSERT_EQ(type_of(first.id), profiler_hub::reader_types::event_type_t::sample);
+    ASSERT_EQ(details->ts, first.timestamp);
+    ASSERT_FALSE(details->te.has_value());
 }
 
 TEST_F(reader_test, v3_counter_track_has_no_agent_info)
@@ -1212,15 +1183,15 @@ TEST_F(reader_test, v3_scalar_value_query_strips_pmc_fanout)
     expect_stats_match_scalars(stats, samples);
     ASSERT_EQ(stats.count, 16U);
 
-    // Every sample's value is reproducible via get_scalar_details (scalar_detail, also
-    // resolver-joined) -- i.e. each opaque id resolves to the track's own single pmc
-    // value, not one of the six fanned metrics.
+    // Every sample's opaque id resolves via get_event_detail to a point event whose ts
+    // matches -- i.e. each id maps to the track's own single de-fanned sample, not one of
+    // the six fanned metrics. The de-fanned value itself is carried on scalar_event_t.
     for(const auto& s : samples)
     {
-        auto details = m_reader->get_scalar_details(s.id);
+        auto details = m_reader->get_event_detail(s.id);
         ASSERT_TRUE(details.has_value()) << "sample row " << row_id_of(s.id);
-        ASSERT_DOUBLE_EQ(details->value, s.value);
-        ASSERT_EQ(details->sample.timestamp, s.timestamp);
+        ASSERT_EQ(details->ts, s.timestamp);
+        ASSERT_FALSE(details->te.has_value());
     }
 }
 
@@ -1265,13 +1236,13 @@ TEST_F(reader_test, v3_get_flows_links_regions_to_gpu_events)
     {
         // Cross-type region->gpu edges are directed source->dest: the region resolves
         // as source, the GPU event as dest. Endpoint type is encoded in the opaque
-        // handle; source resolves through get_region_details(), dest through exactly one
-        // GPU-side detail accessor.
+        // handle; the source is a region, the dest is a (non-region) GPU event.
         ASSERT_GT(row_id_of(f.source), 0U);
         ASSERT_GT(row_id_of(f.dest), 0U);
-        ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
+        ASSERT_EQ(type_of(f.source), profiler_hub::reader_types::event_type_t::region);
+        ASSERT_TRUE(m_reader->get_event_detail(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
-        ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        ASSERT_NE(type_of(f.dest), profiler_hub::reader_types::event_type_t::region);
         // flow_id is the (non-zero) source stack_id; kind is a cross-type region->gpu
         // category (launch_to_dispatch for kernel_dispatch, copy_submit_to_exec for
         // memory_copy/allocate). No same-type stream_dependency edges in this flat
@@ -1369,9 +1340,9 @@ TEST_F(reader_test, v3_get_interval_track_stream_aggregates_ops_with_op_kind)
         ASSERT_GE(ev.end, ev.start);
         ASSERT_EQ(count_interval_resolutions(*m_reader, ev.id), 1)
             << "handle must resolve through exactly one detail accessor";
-        if(m_reader->get_kernel_dispatch_details(ev.id).has_value())
+        if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::kernel_dispatch)
             ++kd;
-        else if(m_reader->get_memory_copy_details(ev.id).has_value())
+        else if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::memory_copy)
             ++mc;
         else
             FAIL() << "unexpected event type on stream 0";
@@ -1615,7 +1586,7 @@ TEST_F(reader_v3_edge_test, get_interval_track_cpu_thread_regions_ordered)
     ASSERT_EQ(regions.front().start, 1000);
     ASSERT_EQ(regions.front().end, 5000);
 
-    auto details = m_reader->get_region_details(regions.front().id);
+    auto details = m_reader->get_event_detail(regions.front().id);
     ASSERT_TRUE(details.has_value());
     ASSERT_EQ(details->name, "RegionAlpha");
 }
@@ -1672,9 +1643,10 @@ TEST_F(reader_v3_edge_test, get_scalar_track_values_for_both_counters)
             ASSERT_EQ(samples.front().timestamp, 1000);
             ASSERT_DOUBLE_EQ(samples.front().value, 10.5);
 
-            auto details = m_reader->get_scalar_details(samples.front().id);
+            auto details = m_reader->get_event_detail(samples.front().id);
             ASSERT_TRUE(details.has_value());
-            ASSERT_DOUBLE_EQ(details->value, samples.front().value);
+            ASSERT_EQ(details->ts, samples.front().timestamp);
+            ASSERT_FALSE(details->te.has_value());
         }
         else if(c->name == "SQ_WAVES")
         {
@@ -1683,9 +1655,10 @@ TEST_F(reader_v3_edge_test, get_scalar_track_values_for_both_counters)
             ASSERT_EQ(samples.front().timestamp, 500);
             ASSERT_DOUBLE_EQ(samples.front().value, 5.0);
 
-            auto details = m_reader->get_scalar_details(samples.front().id);
+            auto details = m_reader->get_event_detail(samples.front().id);
             ASSERT_TRUE(details.has_value());
-            ASSERT_DOUBLE_EQ(details->value, samples.front().value);
+            ASSERT_EQ(details->ts, samples.front().timestamp);
+            ASSERT_FALSE(details->te.has_value());
         }
         // Track 8 ("FallbackCounter") has 1 sample with pmc_id=99 (empty name in
         // rocpd_info_pmc); no specific assertions here — coverage in
@@ -1706,9 +1679,10 @@ TEST_F(reader_v3_edge_test, get_flows_excludes_zero_and_null_stack_id)
     {
         ASSERT_GT(row_id_of(f.source), 0U);
         ASSERT_GT(row_id_of(f.dest), 0U);
-        ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
+        ASSERT_EQ(type_of(f.source), profiler_hub::reader_types::event_type_t::region);
+        ASSERT_TRUE(m_reader->get_event_detail(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
-        ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        ASSERT_NE(type_of(f.dest), profiler_hub::reader_types::event_type_t::region);
         // Directed/typed: excluded stacks (0/NULL) never appear, so every flow_id is a
         // non-zero source stack_id; kind is a cross-type region->gpu category.
         ASSERT_GT(flow_id_value(f.flow_id), 0U);
@@ -1835,11 +1809,12 @@ TEST_F(reader_v3_edge_test, get_interval_track_stream_aggregates_three_op_kinds)
     {
         ASSERT_EQ(count_interval_resolutions(*m_reader, ev.id), 1)
             << "handle must resolve through exactly one detail accessor";
-        if(m_reader->get_kernel_dispatch_details(ev.id).has_value())
+        if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::kernel_dispatch)
             ++kd;
-        else if(m_reader->get_memory_copy_details(ev.id).has_value())
+        else if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::memory_copy)
             ++mc;
-        else if(m_reader->get_memory_alloc_details(ev.id).has_value())
+        else if(type_of(ev.id) ==
+                profiler_hub::reader_types::event_type_t::memory_allocate)
             ++ma;
         else
             FAIL() << "unexpected event type on stream 1";
@@ -1848,14 +1823,17 @@ TEST_F(reader_v3_edge_test, get_interval_track_stream_aggregates_three_op_kinds)
     ASSERT_EQ(mc, 2U);
     ASSERT_EQ(ma, 1U);
     ASSERT_EQ(iv1.front().start, 1200);
-    ASSERT_TRUE(m_reader->get_kernel_dispatch_details(iv1.front().id).has_value());
+    ASSERT_EQ(type_of(iv1.front().id),
+              profiler_hub::reader_types::event_type_t::kernel_dispatch);
     ASSERT_EQ(iv1.back().start, 6100);
-    ASSERT_TRUE(m_reader->get_memory_alloc_details(iv1.back().id).has_value());
+    ASSERT_EQ(type_of(iv1.back().id),
+              profiler_hub::reader_types::event_type_t::memory_allocate);
 
     auto iv2 = m_reader->get_interval_track(s2->id);
     ASSERT_EQ(iv2.size(), 1U);
     ASSERT_EQ(iv2.front().start, 2400);
-    ASSERT_TRUE(m_reader->get_memory_copy_details(iv2.front().id).has_value());
+    ASSERT_EQ(type_of(iv2.front().id),
+              profiler_hub::reader_types::event_type_t::memory_copy);
 
     expect_stats_match_intervals(m_reader->get_track_stats(s1->id), iv1);
     expect_stats_match_intervals(m_reader->get_track_stats(s2->id), iv2);
@@ -1885,9 +1863,9 @@ TEST_F(reader_v3_edge_test, get_interval_track_stream_memalloc_event_carries_cat
     bool found_ma = false;
     for(const auto& ev : iv)
     {
-        // The memory_allocate leg is identified by resolving the handle through the
-        // memory-alloc detail accessor (op_kind is retired).
-        if(m_reader->get_memory_alloc_details(ev.id).has_value())
+        // The memory_allocate leg is identified by the type encoded in its handle
+        // (op_kind is retired).
+        if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::memory_allocate)
         {
             // event_id=7 has no category_id in the edge fixture -> LEFT JOIN yields NULL
             // -> category resolves to empty string (not a missing field, not a crash).
@@ -1922,13 +1900,22 @@ TEST_F(reader_v3_edge_test, get_interval_track_memory_type_interval_and_identity
     EXPECT_EQ(intervals.front().start, 6100U);
     EXPECT_EQ(intervals.front().end, 6200U);
 
-    // the handle must resolve through get_memory_alloc_details().
-    auto details = m_reader->get_memory_alloc_details(intervals.front().id);
+    // the handle must resolve through get_event_detail() as a memory_allocate event.
+    ASSERT_EQ(type_of(intervals.front().id),
+              profiler_hub::reader_types::event_type_t::memory_allocate);
+    auto details = m_reader->get_event_detail(intervals.front().id);
     ASSERT_TRUE(details.has_value());
-    EXPECT_EQ(details->start_timestamp, 6100U);
-    EXPECT_EQ(details->end_timestamp, 6200U);
-    EXPECT_EQ(details->size, 4096U);
-    EXPECT_EQ(details->type, "ALLOC");
+    EXPECT_EQ(details->ts, 6100U);
+    ASSERT_TRUE(details->te.has_value());
+    EXPECT_EQ(details->te.value(), 6200U);
+    auto* size = find_prop(*details, "size");
+    ASSERT_NE(size, nullptr);
+    ASSERT_TRUE(std::holds_alternative<uint64_t>(*size));
+    EXPECT_EQ(std::get<uint64_t>(*size), 4096U);
+    auto* type = find_prop(*details, "type");
+    ASSERT_NE(type, nullptr);
+    ASSERT_TRUE(std::holds_alternative<std::string>(*type));
+    EXPECT_EQ(std::get<std::string>(*type), "ALLOC");
 }
 
 TEST_F(reader_v3_edge_test, get_track_stats_memory_type_matches_interval_slice)
@@ -2346,8 +2333,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_cpu_thread_regions)
     ASSERT_GE(first.end, first.start);
     ASSERT_GT(row_id_of(first.id), 0U);
 
-    // The handle resolves through the region detail path.
-    ASSERT_TRUE(m_reader->get_region_details(first.id).has_value());
+    // The handle resolves through the unified detail path as a region.
+    ASSERT_EQ(type_of(first.id), profiler_hub::reader_types::event_type_t::region);
+    ASSERT_TRUE(m_reader->get_event_detail(first.id).has_value());
 }
 
 TEST_F(reader_v4_test, v4_get_interval_track_cpu_thread_carries_category)
@@ -2367,10 +2355,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_cpu_thread_carries_category)
     ASSERT_EQ(intervals.front().category, "hsa_api");
     for(const auto& ev : intervals)
     {
-        auto details = m_reader->get_region_details(ev.id);
+        auto details = m_reader->get_event_detail(ev.id);
         ASSERT_TRUE(details.has_value());
-        ASSERT_NE(details->event, nullptr);
-        ASSERT_EQ(ev.category, details->event->event_category);
+        ASSERT_EQ(ev.category, details->category);
         ASSERT_EQ(ev.category, "hsa_api");
     }
 }
@@ -2388,8 +2375,10 @@ TEST_F(reader_v4_test, v4_get_interval_track_gpu_queue_dispatches)
     ASSERT_EQ(intervals.front().start, 516609921772013);
     ASSERT_EQ(intervals.front().end, 516609921781427);
 
-    // The handle resolves through the kernel dispatch detail path.
-    ASSERT_TRUE(m_reader->get_kernel_dispatch_details(intervals.front().id).has_value());
+    // The handle resolves through the unified detail path as a kernel dispatch.
+    ASSERT_EQ(type_of(intervals.front().id),
+              profiler_hub::reader_types::event_type_t::kernel_dispatch);
+    ASSERT_TRUE(m_reader->get_event_detail(intervals.front().id).has_value());
 }
 
 TEST_F(reader_v4_test, v4_gpu_queue_track_carries_agent_id)
@@ -2422,10 +2411,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_gpu_queue_carries_category)
     ASSERT_EQ(intervals.front().category, "kernel_dispatch");
     for(const auto& ev : intervals)
     {
-        auto details = m_reader->get_kernel_dispatch_details(ev.id);
+        auto details = m_reader->get_event_detail(ev.id);
         ASSERT_TRUE(details.has_value());
-        ASSERT_NE(details->event, nullptr);
-        ASSERT_EQ(ev.category, details->event->event_category);
+        ASSERT_EQ(ev.category, details->category);
         ASSERT_EQ(ev.category, "kernel_dispatch");
     }
 }
@@ -2441,7 +2429,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_dma_memory_copies)
         auto intervals = m_reader->get_interval_track(d->id);
         ASSERT_EQ(intervals.size(), 1);
         ASSERT_GE(intervals.front().end, intervals.front().start);
-        ASSERT_TRUE(m_reader->get_memory_copy_details(intervals.front().id).has_value());
+        ASSERT_EQ(type_of(intervals.front().id),
+                  profiler_hub::reader_types::event_type_t::memory_copy);
+        ASSERT_TRUE(m_reader->get_event_detail(intervals.front().id).has_value());
     }
 }
 
@@ -2462,10 +2452,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_dma_carries_category)
         for(const auto& ev : intervals)
         {
             ASSERT_EQ(ev.category, "memory_copy");
-            auto details = m_reader->get_memory_copy_details(ev.id);
+            auto details = m_reader->get_event_detail(ev.id);
             ASSERT_TRUE(details.has_value());
-            ASSERT_NE(details->event, nullptr);
-            ASSERT_EQ(ev.category, details->event->event_category);
+            ASSERT_EQ(ev.category, details->category);
         }
     }
 }
@@ -2492,9 +2481,10 @@ TEST_F(reader_v4_test, v4_get_flows_links_regions_to_gpu_events)
     {
         ASSERT_GT(row_id_of(f.source), 0U);
         ASSERT_GT(row_id_of(f.dest), 0U);
-        ASSERT_TRUE(m_reader->get_region_details(f.source).has_value());
+        ASSERT_EQ(type_of(f.source), profiler_hub::reader_types::event_type_t::region);
+        ASSERT_TRUE(m_reader->get_event_detail(f.source).has_value());
         ASSERT_EQ(count_interval_resolutions(*m_reader, f.dest), 1);
-        ASSERT_FALSE(m_reader->get_region_details(f.dest).has_value());
+        ASSERT_NE(type_of(f.dest), profiler_hub::reader_types::event_type_t::region);
         // Directed/typed parity with v3: non-zero source stack_id as flow_id, cross-type
         // region->gpu kind.
         ASSERT_GT(flow_id_value(f.flow_id), 0U);
@@ -2545,7 +2535,8 @@ TEST_F(reader_v4_test, v4_get_interval_track_stream_aggregates_ops_with_op_kind)
     // aggregates ACROSS ops, so its earliest start (a memory_copy at 516609915990946)
     // precedes the gpu_queue's first dispatch (516609921772013) — proof the stream is
     // not just the queue track relabeled. The event's opaque handle encodes its type,
-    // so the matching get_*_details() resolves for every event (op_kind is retired).
+    // so it classifies via type_of() and resolves through get_event_detail (op_kind is
+    // retired).
     auto tracks = m_reader->get_all_tracks();
     auto stream =
         find_first_track(tracks, profiler_hub::reader_types::track_type_t::stream);
@@ -2562,9 +2553,9 @@ TEST_F(reader_v4_test, v4_get_interval_track_stream_aggregates_ops_with_op_kind)
         ASSERT_GE(ev.end, ev.start);
         ASSERT_EQ(count_interval_resolutions(*m_reader, ev.id), 1)
             << "handle must resolve through exactly one detail accessor";
-        if(m_reader->get_kernel_dispatch_details(ev.id).has_value())
+        if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::kernel_dispatch)
             ++kd;
-        else if(m_reader->get_memory_copy_details(ev.id).has_value())
+        else if(type_of(ev.id) == profiler_hub::reader_types::event_type_t::memory_copy)
             ++mc;
         else
             FAIL() << "unexpected event type on stream 0";
@@ -2589,7 +2580,7 @@ TEST_F(reader_v4_test, v4_get_track_stats_stream_matches_interval_slice)
 // ============================================================================
 // Track-scoped API tests — v4.0 synthetic counter fixture (rocpd_v4_counter.db)
 // Built at configure time from committed SQL. Exists solely to exercise the
-// v4.0 scalar/counter path (get_scalar_track / get_scalar_details), which no
+// v4.0 scalar/counter path (get_scalar_track / get_event_detail), which no
 // real v4.0 capture available to the project contains (no rocpd_sample rows).
 // ============================================================================
 
@@ -2665,16 +2656,35 @@ TEST_F(reader_v4_counter_test, v4_get_scalar_track_returns_timestamp_ordered_val
     ASSERT_DOUBLE_EQ(samples[2].value, 30.5);
 }
 
-TEST_F(reader_v4_counter_test, v4_get_scalar_details_resolves_value_and_timestamp)
+TEST_F(reader_v4_counter_test, v4_get_event_detail_resolves_sample_point_event)
 {
-    // sample row id 1 -> timestamp 3000, value 30.5. The scalar handle encodes the
-    // sample event type, which get_scalar_details() requires.
-    auto details = m_reader->get_scalar_details(
+    // sample row id 1 -> timestamp 3000. The scalar handle encodes the sample event
+    // type; get_event_detail resolves it as a point event (te == nullopt). The counter
+    // value itself is carried on scalar_event_t::value, not the unified detail bag.
+    auto details = m_reader->get_event_detail(
         make_event_id(profiler_hub::reader_types::event_type_t::sample, 1));
     ASSERT_TRUE(details.has_value());
-    ASSERT_DOUBLE_EQ(details->value, 30.5);
-    ASSERT_EQ(details->sample.timestamp, 3000);
-    ASSERT_NE(details->sample.track, nullptr);
+    ASSERT_EQ(details->ts, 3000U);
+    ASSERT_FALSE(details->te.has_value());
+}
+
+TEST_F(reader_v4_counter_test, v4_get_event_detail_pmc_event_carries_value)
+{
+    // A pmc_event point handle minted from a known rocpd_pmc_event.id resolves through
+    // the unified detail path: it is a point event (te == nullopt) whose "value" property
+    // carries the counter value as a double. pmc_event id=1 -> event_id=1 -> sample
+    // timestamp 3000, value 30.5. (Reader-minted pmc_event handles on kernel_dispatch_pmc
+    // tracks carry a kernel_dispatch id and route to the interval path, so the point
+    // detail path is exercised here with a directly-minted pmc_event.id handle.)
+    auto details = m_reader->get_event_detail(
+        make_event_id(profiler_hub::reader_types::event_type_t::pmc_event, 1));
+    ASSERT_TRUE(details.has_value());
+    ASSERT_EQ(details->ts, 3000U);
+    ASSERT_FALSE(details->te.has_value());
+    auto* value = find_prop(*details, "value");
+    ASSERT_NE(value, nullptr);
+    ASSERT_TRUE(std::holds_alternative<double>(*value));
+    ASSERT_DOUBLE_EQ(std::get<double>(*value), 30.5);
 }
 
 TEST_F(reader_v4_counter_test, v4_get_interval_track_on_counter_returns_empty)
@@ -2824,10 +2834,12 @@ TEST_F(reader_v3_dma_agent_test, dma_tracks_partition_by_destination_agent)
         std::set<std::string> stream_names;
         for(const auto& ev : intervals)
         {
-            auto details = m_reader->get_memory_copy_details(ev.id);
+            auto details = m_reader->get_event_detail(ev.id);
             ASSERT_TRUE(details.has_value());
-            ASSERT_NE(details->dst_agent_id, nullptr);
-            ASSERT_EQ(details->dst_agent_id->id, track->agent_info->id)
+            auto* dst_agent_id = find_prop(*details, "dst_agent_id");
+            ASSERT_NE(dst_agent_id, nullptr);
+            ASSERT_TRUE(std::holds_alternative<uint64_t>(*dst_agent_id));
+            ASSERT_EQ(std::get<uint64_t>(*dst_agent_id), track->agent_info->id)
                 << "copy in a dma track must target that track's destination agent";
             stream_names.insert(ev.display_name);
         }
