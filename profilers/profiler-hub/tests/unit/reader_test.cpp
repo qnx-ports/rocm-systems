@@ -733,6 +733,67 @@ TEST_F(reader_test, get_call_stack_returns_empty_for_no_call_stack)
     ASSERT_TRUE(stack.empty());
 }
 
+// --- Opaque-handle overloads (task 037 Phase 1 Item 1) ----------------------
+// A consumer that holds only an opaque event_id_t (from get_interval_track /
+// get_scalar_track / flows) must be able to reach the call stack and source
+// context without ever constructing a timeline_event_t. These overloads must
+// return exactly what the timeline_event_t overloads return for the same event.
+
+TEST_F(reader_test, get_call_stack_from_event_id_returns_hipMalloc)
+{
+    // Same memory_allocate event as get_call_stack_for_memory_alloc_returns_hipMalloc,
+    // reached through the opaque handle instead of a timeline_event_t.
+    auto id    = first_handle_of(*m_reader,
+                              profiler_hub::reader_types::event_type_t::memory_allocate);
+    auto stack = m_reader->get_call_stack(id);
+    ASSERT_EQ(stack.size(), 1);
+    ASSERT_TRUE(stack.front().program_counter.has_value());
+    EXPECT_EQ(stack.front().program_counter->function, "hipMalloc");
+
+    // The handle overload must agree with the timeline_event_t overload.
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.types      = { profiler_hub::reader_types::event_type_t::memory_allocate };
+    filter.pagination = { 1, std::nullopt };
+    auto events       = m_reader->get_events(filter);
+    ASSERT_GE(events.size(), 1);
+    auto via_event = m_reader->get_call_stack(events[0]);
+    ASSERT_EQ(via_event.size(), stack.size());
+}
+
+TEST_F(reader_test, get_source_context_from_event_id_returns_entry)
+{
+    auto id      = first_handle_of(*m_reader,
+                              profiler_hub::reader_types::event_type_t::memory_allocate);
+    auto context = m_reader->get_source_context(id);
+    ASSERT_EQ(context.size(), 1);
+    ASSERT_TRUE(context.front().program_counter.has_value());
+    EXPECT_EQ(context.front().program_counter->function, "hipMalloc");
+}
+
+TEST_F(reader_test, get_call_stack_from_event_id_empty_for_no_stack)
+{
+    // Region events in this DB have empty call_stack -> empty-return via the handle,
+    // matching get_call_stack_returns_empty_for_no_call_stack (timeline_event_t path).
+    auto id =
+        first_handle_of(*m_reader, profiler_hub::reader_types::event_type_t::region);
+    EXPECT_TRUE(m_reader->get_call_stack(id).empty());
+    EXPECT_TRUE(m_reader->get_source_context(id).empty());
+}
+
+TEST_F(reader_test, get_call_stack_from_event_id_empty_for_point_event)
+{
+    // sample / pmc_event have no metadata row (resolve_event_metadata default ->
+    // nullopt); the handle overload must fall through to the empty-return semantics.
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+    auto samples = m_reader->get_scalar_track(counter->id);
+    ASSERT_FALSE(samples.empty());
+    EXPECT_TRUE(m_reader->get_call_stack(samples.front().id).empty());
+    EXPECT_TRUE(m_reader->get_source_context(samples.front().id).empty());
+}
+
 TEST_F(reader_test, get_arguments_for_hipGetDevice_has_correct_values)
 {
     // Region id=23 (hipGetDevice, event_id=86) has 1 arg: pos=0, type=int*, name=deviceId
@@ -1929,6 +1990,79 @@ TEST_F(reader_v3_edge_test, get_track_stats_memory_type_matches_interval_slice)
     auto intervals = m_reader->get_interval_track(mem_trk.front()->id);
     expect_stats_match_intervals(m_reader->get_track_stats(mem_trk.front()->id),
                                  intervals);
+}
+
+// --- get_event_detail arg-fold for kd / mc / ma (task 037 Phase 1 Item 2) ----
+// The bundled bit_extract capture only has args on region events, so these three
+// tests live on the edge fixture, which authors rocpd_arg rows on the shared event
+// rows of a kernel_dispatch (event 4), a memory_copy (event 5), and a
+// memory_allocate (event 7). Before Item 2, get_event_detail folded args for the
+// region case only; now all four detail types must carry them.
+
+// Scan a track's interval handles for the get_event_detail whose property bag
+// contains `arg_key`, and return that value (or nullptr if none carries it).
+static const profiler_hub::reader_types::arg_value_t*
+find_folded_arg_on_track(const profiler_hub::reader_t&                       r,
+                         const profiler_hub::reader_types::track_info_ptr_t& track,
+                         const std::string&                                  arg_key)
+{
+    static profiler_hub::reader_types::arg_value_t s_hit;
+    for(const auto& iv : r.get_interval_track(track->id))
+    {
+        auto detail = r.get_event_detail(iv.id);
+        if(!detail) continue;
+        if(const auto* v = find_prop(*detail, arg_key))
+        {
+            s_hit = *v;
+            return &s_hit;
+        }
+    }
+    return nullptr;
+}
+
+TEST_F(reader_v3_edge_test, get_event_detail_folds_args_for_kernel_dispatch)
+{
+    auto                                           tracks = m_reader->get_all_tracks();
+    const profiler_hub::reader_types::arg_value_t* kernel_name = nullptr;
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::gpu_queue))
+    {
+        kernel_name = find_folded_arg_on_track(*m_reader, t, "kernel_name");
+        if(kernel_name) break;
+    }
+    ASSERT_NE(kernel_name, nullptr) << "kernel_dispatch detail did not fold its args";
+    ASSERT_TRUE(std::holds_alternative<std::string>(*kernel_name));
+    EXPECT_EQ(std::get<std::string>(*kernel_name), "vecAdd");
+}
+
+TEST_F(reader_v3_edge_test, get_event_detail_folds_args_for_memory_copy)
+{
+    auto                                           tracks = m_reader->get_all_tracks();
+    const profiler_hub::reader_types::arg_value_t* bytes  = nullptr;
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::dma))
+    {
+        bytes = find_folded_arg_on_track(*m_reader, t, "bytes");
+        if(bytes) break;
+    }
+    ASSERT_NE(bytes, nullptr) << "memory_copy detail did not fold its args";
+    ASSERT_TRUE(std::holds_alternative<std::string>(*bytes));
+    EXPECT_EQ(std::get<std::string>(*bytes), "1024");
+}
+
+TEST_F(reader_v3_edge_test, get_event_detail_folds_args_for_memory_allocate)
+{
+    auto                                           tracks = m_reader->get_all_tracks();
+    const profiler_hub::reader_types::arg_value_t* alloc_bytes = nullptr;
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::memory))
+    {
+        alloc_bytes = find_folded_arg_on_track(*m_reader, t, "alloc_bytes");
+        if(alloc_bytes) break;
+    }
+    ASSERT_NE(alloc_bytes, nullptr) << "memory_allocate detail did not fold its args";
+    ASSERT_TRUE(std::holds_alternative<std::string>(*alloc_bytes));
+    EXPECT_EQ(std::get<std::string>(*alloc_bytes), "4096");
 }
 
 // ============================================================================
