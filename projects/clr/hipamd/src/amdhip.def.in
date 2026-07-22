@@ -560,4 +560,5 @@ hipExecutionCtxRecordEvent
 hipExecutionCtxSynchronize
 hipExecutionCtxWaitEvent
 hipMemGetDefaultMemPool
+hipExtMemcpyBatchAsync
 @HSA_EXPORTS@
