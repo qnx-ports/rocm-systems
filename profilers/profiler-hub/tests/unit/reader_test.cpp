@@ -1012,6 +1012,171 @@ TEST_F(reader_test, v3_get_interval_track_cpu_thread_ordered_values)
     ASSERT_EQ(details->name, "bit_extract");
 }
 
+// Task 039: get_interval_track's optional time_window must select by OVERLAP, not
+// containment. A timeline render windows a track to the visible viewport and must keep
+// every bar that intersects it — including bars that straddle an edge. Prior to task 039
+// the post-filter dropped any bar not fully inside [lo, hi] (containment), silently
+// hiding straddling bars. These tests pin the overlap contract against real region data.
+//
+// The v3 cpu_thread region track (59 nested regions, id 1..59) is used because its deep
+// nesting guarantees bars in every category relative to an interior window: fully inside,
+// fully before, fully after, straddling the lo edge, straddling the hi edge, and (the
+// outermost region id=59) straddling BOTH edges. Window bounds are chosen from the known
+// fixture coordinates so each category is populated deterministically.
+namespace
+{
+// Interior window over the 59-region track. Verified against the fixture (see below).
+constexpr profiler_hub::reader_types::timestamp_ns_t kWinLo = 23040380000000ULL;
+constexpr profiler_hub::reader_types::timestamp_ns_t kWinHi = 23040388000000ULL;
+
+// Row ids representative of each category for [kWinLo, kWinHi]:
+constexpr size_t kInsideId     = 21;  // 383094032..383100851  — fully inside
+constexpr size_t kBeforeId     = 1;   // 314699996..314726875  — ends before lo
+constexpr size_t kAfterId      = 40;  // 399677973..399682472  — starts after hi
+constexpr size_t kStraddleLoId = 20;  // 379163516..382331250  — start<lo, end in-window
+constexpr size_t kStraddleHiId = 47;  // 383924772..497015233  — start in-window, end>hi
+constexpr size_t kStraddleBothId = 59;  // 260707644..498732102 — start<lo AND end>hi
+
+// The 59-region cpu_thread interval track (window-less), or empty if not found.
+profiler_hub::reader_types::interval_event_list_t
+full_region_track(const profiler_hub::reader_t& reader)
+{
+    auto tracks = reader.get_all_tracks();
+    for(const auto& t :
+        find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread))
+    {
+        auto intervals = reader.get_interval_track(t->id);
+        if(intervals.size() == 59) return intervals;
+    }
+    return {};
+}
+}  // namespace
+
+TEST_F(reader_test, v3_get_interval_track_time_window_selects_by_overlap)
+{
+    const auto full = full_region_track(*m_reader);
+    ASSERT_EQ(full.size(), 59U)
+        << "no cpu_thread track returned the expected 59 region intervals";
+
+    // Windowed read.
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.time_window.start = kWinLo;
+    filter.time_window.end   = kWinHi;
+
+    // Resolve the windowed track from the SAME track the full read came from.
+    profiler_hub::reader_types::interval_event_list_t windowed;
+    {
+        auto tracks = m_reader->get_all_tracks();
+        for(const auto& t :
+            find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread))
+        {
+            if(m_reader->get_interval_track(t->id).size() == 59)
+            {
+                windowed = m_reader->get_interval_track(t->id, filter);
+                break;
+            }
+        }
+    }
+
+    // Expected KEPT set under OVERLAP: NOT(end < lo || start > hi). Expected KEPT set
+    // under the OLD containment predicate: NOT(start < lo || end > hi). Derive both from
+    // the full track so the assertions can't drift from the fixture.
+    std::set<size_t> expected_overlap;
+    std::set<size_t> expected_containment;
+    for(const auto& ev : full)
+    {
+        if(!(ev.end < kWinLo || ev.start > kWinHi))
+            expected_overlap.insert(row_id_of(ev.id));
+        if(!(ev.start < kWinLo || ev.end > kWinHi))
+            expected_containment.insert(row_id_of(ev.id));
+    }
+
+    std::set<size_t> got;
+    for(const auto& ev : windowed)
+        got.insert(row_id_of(ev.id));
+
+    // The windowed read returns exactly the overlap set — no more, no less.
+    ASSERT_EQ(got, expected_overlap);
+
+    // Ordering contract preserved after filtering.
+    ASSERT_TRUE(is_start_sorted(windowed));
+
+    // Guard-bite: overlap must be a STRICT superset of containment. If the predicate ever
+    // reverts to containment, expected_overlap == got would still pass against a
+    // containment implementation only if no straddling bar existed — this fixture
+    // guarantees several, so a containment implementation would fail ASSERT_EQ above.
+    // Assert the strictness explicitly so the intent is self-documenting.
+    ASSERT_GT(expected_overlap.size(), expected_containment.size())
+        << "fixture must contain straddling bars for the guard-bite to bite";
+    for(size_t id : expected_containment)
+        ASSERT_TRUE(expected_overlap.count(id))
+            << "overlap must keep everything containment keeps";
+
+    // Category membership (deterministic for this fixture + window):
+    EXPECT_TRUE(got.count(kInsideId)) << "bar fully inside the window must be kept";
+    EXPECT_FALSE(got.count(kBeforeId))
+        << "bar entirely before the window must be dropped";
+    EXPECT_FALSE(got.count(kAfterId)) << "bar entirely after the window must be dropped";
+    EXPECT_TRUE(got.count(kStraddleLoId)) << "bar straddling the lo edge must be kept";
+    EXPECT_TRUE(got.count(kStraddleHiId)) << "bar straddling the hi edge must be kept";
+    EXPECT_TRUE(got.count(kStraddleBothId)) << "bar straddling both edges must be kept";
+}
+
+// Focused guard-bite: each straddling bar is kept by overlap AND would be dropped by the
+// pre-039 containment predicate. This test FAILS if the predicate is containment.
+TEST_F(reader_test, v3_get_interval_track_time_window_keeps_straddling_bars)
+{
+    const auto full = full_region_track(*m_reader);
+    ASSERT_EQ(full.size(), 59U);
+
+    // Map row id -> (start,end) for the straddlers we assert on.
+    std::map<size_t,
+             std::pair<profiler_hub::reader_types::timestamp_ns_t,
+                       profiler_hub::reader_types::timestamp_ns_t>>
+        by_id;
+    for(const auto& ev : full)
+        by_id[row_id_of(ev.id)] = { ev.start, ev.end };
+
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.time_window.start = kWinLo;
+    filter.time_window.end   = kWinHi;
+
+    profiler_hub::reader_types::interval_event_list_t windowed;
+    {
+        auto tracks = m_reader->get_all_tracks();
+        for(const auto& t :
+            find_tracks(tracks, profiler_hub::reader_types::track_type_t::cpu_thread))
+        {
+            if(m_reader->get_interval_track(t->id).size() == 59)
+            {
+                windowed = m_reader->get_interval_track(t->id, filter);
+                break;
+            }
+        }
+    }
+
+    std::set<size_t> got;
+    for(const auto& ev : windowed)
+        got.insert(row_id_of(ev.id));
+
+    for(size_t id : { kStraddleLoId, kStraddleHiId, kStraddleBothId })
+    {
+        ASSERT_TRUE(by_id.count(id)) << "fixture missing straddler id " << id;
+        const auto [start, end] = by_id[id];
+        // It really does straddle: the OLD containment predicate would drop it.
+        const bool dropped_by_containment = (start < kWinLo) || (end > kWinHi);
+        EXPECT_TRUE(dropped_by_containment)
+            << "id " << id
+            << " should straddle a window edge (containment would drop it)";
+        // It really does overlap the window: NOT entirely outside.
+        const bool overlaps = !(end < kWinLo || start > kWinHi);
+        EXPECT_TRUE(overlaps) << "id " << id << " should overlap the window";
+        // The overlap predicate keeps it.
+        EXPECT_TRUE(got.count(id))
+            << "straddling bar id " << id << " must be KEPT by the overlap post-filter";
+    }
+}
+
 TEST_F(reader_test, v3_get_interval_track_cpu_thread_carries_category)
 {
     // Category is per-EVENT, not derivable from the track type or region kind: the
