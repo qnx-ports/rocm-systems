@@ -836,6 +836,51 @@ TEST_F(reader_test, get_arguments_returns_empty_for_event_without_args)
     ASSERT_TRUE(args.empty());
 }
 
+// A consumer that holds only an opaque event_id_t must reach the full argument list
+// (position + type preserved, unlike the folded name/value pairs in
+// event_detail_t::properties) and get exactly what the timeline_event_t overload returns.
+TEST_F(reader_test, get_arguments_from_event_id_has_correct_values)
+{
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.types = { profiler_hub::reader_types::event_type_t::region };
+    auto events  = m_reader->get_events(filter);
+    ASSERT_GT(events.size(), 0);
+
+    bool found = false;
+    for(const auto& event : events)
+    {
+        if(event.display_name != "hipGetDevice") continue;
+        auto via_event = m_reader->get_arguments(event);
+        if(via_event.empty()) continue;
+
+        auto id = make_event_id(event.unique_identifier.type, event.unique_identifier.id);
+        auto via_id = m_reader->get_arguments(id);
+
+        ASSERT_EQ(via_id.size(), via_event.size());
+        ASSERT_EQ(via_id.size(), 1);
+        EXPECT_EQ(via_id[0]->position, 0);
+        EXPECT_EQ(via_id[0]->type, "int*");
+        EXPECT_EQ(via_id[0]->name, "deviceId");
+        EXPECT_EQ(via_id[0]->value, "0");
+        found = true;
+        break;
+    }
+    ASSERT_TRUE(found) << "No hipGetDevice region with arguments found";
+}
+
+TEST_F(reader_test, get_arguments_from_event_id_empty_for_point_event)
+{
+    // sample / pmc_event have no metadata row; the handle overload must fall through
+    // to the empty-return semantics, matching the call-stack/source-context overloads.
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+    auto samples = m_reader->get_scalar_track(counter->id);
+    ASSERT_FALSE(samples.empty());
+    EXPECT_TRUE(m_reader->get_arguments(samples.front().id).empty());
+}
+
 TEST_F(reader_test, get_correlated_events_finds_related_events)
 {
     // stack_id=7 has 2 events (event_id 182 and 203).
