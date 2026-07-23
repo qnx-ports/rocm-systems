@@ -71,7 +71,7 @@ session::set_action(std::string_view name, action act)
     // observe transitions in the same order they were computed. Deliberately
     // a separate mutex from m_actions_mutex (released below, before
     // notify_pause()/notify_resume() run) so a subscriber callback that
-    // re-enters is_active()/is_active_excluding_trigger() cannot deadlock.
+    // re-enters is_active()/is_active_without() cannot deadlock.
     std::scoped_lock const notify_lk{ m_notify_mutex };
 
     scope event_scope = scope::global;
@@ -137,8 +137,7 @@ session::resolve_locked(scope event_scope) const noexcept
 }
 
 bool
-session::is_active_excluding_trigger(std::string_view name,
-                                     scope            event_scope) const noexcept
+session::is_active_without(std::string_view name, scope event_scope) const noexcept
 {
     std::scoped_lock const lk{ m_actions_mutex };
     return std::none_of(m_actions.begin(), m_actions.end(),
