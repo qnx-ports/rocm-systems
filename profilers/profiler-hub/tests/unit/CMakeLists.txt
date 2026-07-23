@@ -420,6 +420,52 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_mem_activity_fixture)
 
+# Synthetic v3 memory_activity time-window straddle fixture (task 045).
+set(_v3maw_uuid "00000000000000000000000000730045")
+set(_v3maw_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3maw_data_src
+    ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_mem_activity_window_data.sql
+)
+set(_v3maw_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_mem_activity_window_gen.sql)
+file(READ ${_v3maw_schema_src} _v3maw_schema)
+file(READ ${_v3maw_data_src} _v3maw_data)
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3maw_schema
+    "${_v3maw_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3maw_uuid}" _v3maw_schema "${_v3maw_schema}")
+string(REPLACE "{{guid}}" "${_v3maw_uuid}" _v3maw_schema "${_v3maw_schema}")
+string(REPLACE "{{uuid}}" "_${_v3maw_uuid}" _v3maw_data "${_v3maw_data}")
+string(REPLACE "{{guid}}" "${_v3maw_uuid}" _v3maw_data "${_v3maw_data}")
+file(WRITE ${_v3maw_gen_sql} "${_v3maw_schema}\n${_v3maw_data}\n")
+
+set(ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_mem_activity_window.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH}
+        ".read ${_v3maw_gen_sql}"
+    DEPENDS ${_v3maw_gen_sql} ${_v3maw_schema_src} ${_v3maw_data_src}
+    COMMENT "Generating synthetic v3 memory_activity time-window test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_mem_activity_window_fixture
+    DEPENDS ${ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH}
+)
+add_dependencies(
+    profiler-hub_unit_tests profiler-hub_v3_mem_activity_window_fixture
+)
+
 # Synthetic v4.0 memory_activity fixture (task 012B).
 set(_v4ma_uuid "0000000000000000000000000c020002")
 set(_v4ma_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_mem_activity_data.sql)
@@ -582,6 +628,7 @@ target_compile_definitions(
         ROCPD_DB_V3_KD_PMC_PATH="${ROCPD_DB_V3_KD_PMC_PATH}"
         ROCPD_DB_V4_KD_PMC_PATH="${ROCPD_DB_V4_KD_PMC_PATH}"
         ROCPD_DB_V3_MEM_ACTIVITY_PATH="${ROCPD_DB_V3_MEM_ACTIVITY_PATH}"
+        ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH="${ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH}"
         ROCPD_DB_V4_MEM_ACTIVITY_PATH="${ROCPD_DB_V4_MEM_ACTIVITY_PATH}"
         ROCPD_DB_V3_AMB_PMC_PATH="${ROCPD_DB_V3_AMB_PMC_PATH}"
         ROCPD_DB_V4_AMB_PMC_PATH="${ROCPD_DB_V4_AMB_PMC_PATH}"

@@ -543,6 +543,160 @@ TEST_F(reader_test, get_event_count_with_time_window_matches_filtered_events)
     ASSERT_EQ(m_reader->get_event_count(windowed), windowed_events.size());
 }
 
+// ----------------------------------------------------------------------------
+// Time-windowed query paths (task 045, closing 043 gaps 4 & 5). The reader's
+// event count/query time filter is an INTERVAL-OVERLAP predicate, inclusive on
+// both ends: an event is kept iff `start <= window.end AND end >= window.start`
+// (source/data_storage/read_statements.hpp: *_time_filtered / time_filtered /
+// track_and_time_filtered). These tests build a window from the data's own start
+// range so it is a strict subrange -- proving the has_time branch both KEEPS the
+// overlapping subset and EXCLUDES the rest, not merely that the call succeeded.
+// ----------------------------------------------------------------------------
+
+// Interval-overlap membership, matching the reader's SQL comparison operators.
+static bool
+event_overlaps_window(const profiler_hub::reader_types::timeline_event_t& e,
+                      uint64_t                                            win_start,
+                      uint64_t                                            win_end)
+{
+    return e.start_timestamp <= win_end && e.end_timestamp >= win_start;
+}
+
+// [min_start, midpoint] over a set of events -- guaranteed to overlap some events
+// and to exclude the latest-starting one (its start lies past the midpoint).
+static std::pair<uint64_t, uint64_t>
+strict_subwindow(const profiler_hub::reader_types::timeline_event_list_t& events)
+{
+    uint64_t min_start = events.front().start_timestamp;
+    uint64_t max_start = events.front().start_timestamp;
+    for(const auto& e : events)
+    {
+        min_start = std::min<uint64_t>(min_start, e.start_timestamp);
+        max_start = std::max<uint64_t>(max_start, e.start_timestamp);
+    }
+    return { min_start, min_start + (max_start - min_start) / 2 };
+}
+
+TEST_F(reader_test, get_events_time_window_returns_overlap_subset)
+{
+    const auto all_events = m_reader->get_events();
+    ASSERT_GE(all_events.size(), 2U);
+
+    const auto [win_start, win_end] = strict_subwindow(all_events);
+    ASSERT_LT(win_start, win_end);  // needs a real spread to exercise exclusion
+
+    profiler_hub::reader_types::event_filter_t windowed;
+    windowed.time_window.start = win_start;
+    windowed.time_window.end   = win_end;
+    const auto windowed_events = m_reader->get_events(windowed);
+
+    size_t expected = 0;
+    for(const auto& e : all_events)
+        if(event_overlaps_window(e, win_start, win_end)) ++expected;
+
+    ASSERT_EQ(windowed_events.size(), expected);
+    ASSERT_LT(windowed_events.size(), all_events.size());  // filter dropped some
+    for(const auto& e : windowed_events)
+        ASSERT_TRUE(event_overlaps_window(e, win_start, win_end));
+}
+
+TEST_F(reader_test, get_events_for_track_time_window_returns_overlap_subset)
+{
+    // First track that yields >= 2 events unwindowed (need spread to test exclusion).
+    profiler_hub::reader_types::track_info_ptr_t      track;
+    profiler_hub::reader_types::timeline_event_list_t all_events;
+    for(const auto& t : m_reader->get_all_tracks())
+    {
+        auto ev = m_reader->get_events_for_track(t);
+        if(ev.size() >= 2)
+        {
+            track      = t;
+            all_events = std::move(ev);
+            break;
+        }
+    }
+    ASSERT_NE(track, nullptr);
+
+    const auto [win_start, win_end] = strict_subwindow(all_events);
+    ASSERT_LT(win_start, win_end);
+
+    profiler_hub::reader_types::event_filter_t windowed;
+    windowed.time_window.start = win_start;
+    windowed.time_window.end   = win_end;
+    const auto windowed_events = m_reader->get_events_for_track(track, windowed);
+
+    size_t expected = 0;
+    for(const auto& e : all_events)
+        if(event_overlaps_window(e, win_start, win_end)) ++expected;
+
+    ASSERT_EQ(windowed_events.size(), expected);
+    ASSERT_LT(windowed_events.size(), all_events.size());
+    for(const auto& e : windowed_events)
+        ASSERT_TRUE(event_overlaps_window(e, win_start, win_end));
+}
+
+TEST_F(reader_test, get_event_counts_time_window_filters_all_types)
+{
+    using event_type_t    = profiler_hub::reader_types::event_type_t;
+    const auto unwindowed = m_reader->get_event_counts();
+
+    const auto all_events = m_reader->get_events();
+    ASSERT_GE(all_events.size(), 2U);
+    const auto [win_start, win_end] = strict_subwindow(all_events);
+    ASSERT_LT(win_start, win_end);
+
+    profiler_hub::reader_types::time_window_t window;
+    window.start        = win_start;
+    window.end          = win_end;
+    const auto windowed = m_reader->get_event_counts(window);
+
+    // Oracle: the materialized overlap subset from get_events(window), bucketed by type.
+    profiler_hub::reader_types::event_filter_t wfilter;
+    wfilter.time_window                            = window;
+    const auto                     windowed_events = m_reader->get_events(wfilter);
+    std::map<event_type_t, size_t> per_type;
+    for(const auto& e : windowed_events)
+        per_type[e.unique_identifier.type]++;
+
+    size_t unwindowed_total = 0;
+    size_t windowed_total   = 0;
+    for(auto t : { event_type_t::region,
+                   event_type_t::kernel_dispatch,
+                   event_type_t::memory_copy,
+                   event_type_t::memory_allocate })
+    {
+        // Plural get_event_counts(window) == materialized events of that type.
+        ASSERT_EQ(windowed.at(t), per_type[t]);
+        // ... and never exceeds the unwindowed count.
+        ASSERT_LE(windowed.at(t), unwindowed.at(t));
+        // Singular get_event_count(window+type) agrees with the plural map.
+        profiler_hub::reader_types::event_filter_t f;
+        f.types       = { t };
+        f.time_window = window;
+        ASSERT_EQ(m_reader->get_event_count(f), windowed.at(t));
+
+        unwindowed_total += unwindowed.at(t);
+        windowed_total += windowed.at(t);
+    }
+    ASSERT_LT(windowed_total, unwindowed_total);  // the window removed some events
+}
+
+TEST_F(reader_test, get_event_count_time_window_fewer_than_unwindowed)
+{
+    const auto all_events = m_reader->get_events();
+    ASSERT_GE(all_events.size(), 2U);
+    const auto [win_start, win_end] = strict_subwindow(all_events);
+    ASSERT_LT(win_start, win_end);
+
+    profiler_hub::reader_types::event_filter_t windowed;
+    windowed.time_window.start = win_start;
+    windowed.time_window.end   = win_end;
+
+    const auto windowed_count = m_reader->get_event_count(windowed);
+    ASSERT_EQ(windowed_count, m_reader->get_events(windowed).size());
+    ASSERT_LT(windowed_count, m_reader->get_event_count());
+}
+
 // ============================================================================
 // Event detail tests
 // ============================================================================
@@ -2921,6 +3075,51 @@ TEST_F(reader_v4_test, v4_get_track_stats_stream_matches_interval_slice)
     ASSERT_EQ(stats.count, 22U);
 }
 
+// Parity for task 045 gap 4 on the v4.0 backend: the windowed count path uses a
+// separate v4 SQL implementation (read_statements_v4.hpp), so exercise it too.
+TEST_F(reader_v4_test, v4_get_event_counts_time_window_filters)
+{
+    using event_type_t    = profiler_hub::reader_types::event_type_t;
+    const auto all_events = m_reader->get_events();
+    ASSERT_GE(all_events.size(), 2U);
+
+    uint64_t min_start = all_events.front().start_timestamp;
+    uint64_t max_start = all_events.front().start_timestamp;
+    for(const auto& e : all_events)
+    {
+        min_start = std::min<uint64_t>(min_start, e.start_timestamp);
+        max_start = std::max<uint64_t>(max_start, e.start_timestamp);
+    }
+    ASSERT_LT(min_start, max_start);
+    profiler_hub::reader_types::time_window_t window;
+    window.start = min_start;
+    window.end   = min_start + (max_start - min_start) / 2;
+
+    const auto unwindowed = m_reader->get_event_counts();
+    const auto windowed   = m_reader->get_event_counts(window);
+
+    profiler_hub::reader_types::event_filter_t wfilter;
+    wfilter.time_window                            = window;
+    const auto                     windowed_events = m_reader->get_events(wfilter);
+    std::map<event_type_t, size_t> per_type;
+    for(const auto& e : windowed_events)
+        per_type[e.unique_identifier.type]++;
+
+    size_t unwindowed_total = 0;
+    size_t windowed_total   = 0;
+    for(auto t : { event_type_t::region,
+                   event_type_t::kernel_dispatch,
+                   event_type_t::memory_copy,
+                   event_type_t::memory_allocate })
+    {
+        ASSERT_EQ(windowed.at(t), per_type[t]);
+        ASSERT_LE(windowed.at(t), unwindowed.at(t));
+        unwindowed_total += unwindowed.at(t);
+        windowed_total += windowed.at(t);
+    }
+    ASSERT_LT(windowed_total, unwindowed_total);
+}
+
 // ============================================================================
 // Track-scoped API tests — v4.0 synthetic counter fixture (rocpd_v4_counter.db)
 // Built at configure time from committed SQL. Exists solely to exercise the
@@ -3703,6 +3902,113 @@ TEST_F(reader_v3_mem_activity_test, v3_get_interval_track_returns_empty_for_mem_
                               profiler_hub::reader_types::track_type_t::memory_activity);
     ASSERT_GE(tracks.size(), 1U);
     ASSERT_TRUE(m_reader->get_interval_track(tracks.front()->id).empty());
+}
+
+// ============================================================================
+// memory_activity time-window straddle — v3 synthetic fixture (task 045, gap 3).
+// The window `continue` filters inside get_scalar_track's memory_activity branch
+// (source/reader_impl.cpp ~2515-2520 ALLOC, ~2548-2553 FREE) are point-in-window
+// on r.start, inclusive: a row is kept iff window.start <= r.start <= window.end.
+// The fixture (rocpd_v3_mem_activity_window_data.sql) has ALLOC and FREE rows both
+// BEFORE and AFTER a [3000,5000] window, so all four filters fire; the emitted
+// running-sum values reflect the skipped pre-window rows, proving the filter runs
+// AFTER accumulation, not before.
+// ============================================================================
+
+class reader_v3_mem_activity_window_test : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_storage = std::make_unique<profiler_hub::storage_t>(m_database_path, "");
+        m_reader  = std::make_shared<profiler_hub::reader_t>(std::move(m_storage));
+    }
+
+    void TearDown() override
+    {
+        m_reader.reset();
+        m_storage.reset();
+    }
+
+    // The single memory_activity track (agent 1) in the straddle fixture.
+    profiler_hub::reader_types::track_info_ptr_t mem_activity_track()
+    {
+        auto tracks =
+            find_tracks(m_reader->get_all_tracks(),
+                        profiler_hub::reader_types::track_type_t::memory_activity);
+        EXPECT_EQ(tracks.size(), 1U);
+        return tracks.empty() ? nullptr : tracks.front();
+    }
+
+    std::string m_database_path{ ROCPD_DB_V3_MEM_ACTIVITY_WINDOW_PATH };
+    std::unique_ptr<profiler_hub::storage_t> m_storage;
+    std::shared_ptr<profiler_hub::reader_t>  m_reader;
+};
+
+TEST_F(reader_v3_mem_activity_window_test, unwindowed_returns_full_straddle_series)
+{
+    auto track = mem_activity_track();
+    ASSERT_NE(track, nullptr);
+
+    auto scalars = m_reader->get_scalar_track(track->id);
+    ASSERT_EQ(scalars.size(), 7U);
+    ASSERT_TRUE(is_timestamp_sorted(scalars));
+
+    // Cumulative running sum across all 7 ALLOC/FREE rows.
+    const std::vector<std::pair<uint64_t, double>> expected = {
+        { 1000, 100.0 },  { 2000, 0.0 },    { 3000, 500.0 }, { 4000, 300.0 },
+        { 5000, 1000.0 }, { 6000, 1999.0 }, { 7000, 1000.0 }
+    };
+    ASSERT_EQ(scalars.size(), expected.size());
+    for(size_t i = 0; i < expected.size(); ++i)
+    {
+        ASSERT_EQ(scalars[i].timestamp, expected[i].first);
+        ASSERT_DOUBLE_EQ(scalars[i].value, expected[i].second);
+    }
+}
+
+TEST_F(reader_v3_mem_activity_window_test, time_window_straddle_filters_alloc_and_free)
+{
+    auto track = mem_activity_track();
+    ASSERT_NE(track, nullptr);
+
+    profiler_hub::reader_types::event_filter_t f;
+    f.time_window.start = 3000;
+    f.time_window.end   = 5000;
+    auto scalars        = m_reader->get_scalar_track(track->id, f);
+
+    // Boundary-inclusive: rows at 3000 and 5000 are kept; the pre-window ALLOC(1000)
+    // + FREE(2000) and post-window ALLOC(6000) + FREE(7000) are all dropped, firing
+    // every ALLOC and FREE `continue` on both sides of the window.
+    ASSERT_EQ(scalars.size(), 3U);
+    ASSERT_TRUE(is_timestamp_sorted(scalars));
+    ASSERT_EQ(scalars[0].timestamp, 3000U);
+    ASSERT_DOUBLE_EQ(scalars[0].value, 500.0);
+    ASSERT_EQ(scalars[1].timestamp, 4000U);
+    ASSERT_DOUBLE_EQ(scalars[1].value, 300.0);
+    ASSERT_EQ(scalars[2].timestamp, 5000U);
+    ASSERT_DOUBLE_EQ(scalars[2].value, 1000.0);
+
+    // The filter demonstrably removed rows (full series is 7).
+    ASSERT_LT(scalars.size(), m_reader->get_scalar_track(track->id).size());
+}
+
+TEST_F(reader_v3_mem_activity_window_test, time_window_start_only_drops_earlier_rows)
+{
+    auto track = mem_activity_track();
+    ASSERT_NE(track, nullptr);
+
+    // Only start set (end = nullopt): exercises the has_value() guard on the end
+    // filter while the start `continue` drops every row with start < 6000.
+    profiler_hub::reader_types::event_filter_t f;
+    f.time_window.start = 6000;
+    auto scalars        = m_reader->get_scalar_track(track->id, f);
+
+    ASSERT_EQ(scalars.size(), 2U);
+    ASSERT_EQ(scalars[0].timestamp, 6000U);
+    ASSERT_DOUBLE_EQ(scalars[0].value, 1999.0);  // ALLOC 999 on running 1000
+    ASSERT_EQ(scalars[1].timestamp, 7000U);
+    ASSERT_DOUBLE_EQ(scalars[1].value, 1000.0);  // FREE 999
 }
 
 // ============================================================================
