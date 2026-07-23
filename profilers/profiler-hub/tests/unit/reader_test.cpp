@@ -3816,6 +3816,174 @@ TEST_F(reader_v4_mem_activity_test, v4_get_interval_track_returns_empty_for_mem_
     ASSERT_TRUE(m_reader->get_interval_track(tracks.front()->id).empty());
 }
 
+// Task 044: the v4 `memory`-typed tracks (the real rocpd_track rows carrying
+// memory_allocate rows, distinct from the synthesized memory_activity tracks)
+// exercise the v4 memory arms of get_interval_track (memory_alloc_interval_track_v4)
+// and get_track_stats (memory_alloc_stats_track_v4), which no prior test lit. The
+// fixture's 5 allocate rows resolve through the rocpd_timestamp spine to:
+//   track 1 (agent 1): starts {1000,3000,4000,5000} ends {..,5100} -> count 4
+//   track 2 (agent 2): start  {2000}                end 2100       -> count 1
+TEST_F(reader_v4_mem_activity_test, v4_memory_track_interval_matches_stats)
+{
+    auto tracks = find_tracks(m_reader->get_all_tracks(),
+                              profiler_hub::reader_types::track_type_t::memory);
+    ASSERT_EQ(tracks.size(), 2U);
+
+    bool saw_track1 = false;
+    bool saw_track2 = false;
+    for(const auto& t : tracks)
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        auto stats     = m_reader->get_track_stats(t->id);
+        ASSERT_TRUE(is_start_sorted(intervals));
+        expect_stats_match_intervals(stats, intervals);
+
+        if(stats.min_ts.has_value() && stats.min_ts.value() == 1000U)
+        {
+            saw_track1 = true;
+            ASSERT_EQ(intervals.size(), 4U);
+            ASSERT_EQ(intervals[0].start, 1000U);
+            ASSERT_EQ(intervals[1].start, 3000U);
+            ASSERT_EQ(intervals[2].start, 4000U);
+            ASSERT_EQ(intervals[3].start, 5000U);
+            ASSERT_EQ(stats.count, 4U);
+            ASSERT_EQ(stats.max_ts.value(), 5100U);
+        }
+        else
+        {
+            saw_track2 = true;
+            ASSERT_EQ(intervals.size(), 1U);
+            ASSERT_EQ(intervals[0].start, 2000U);
+            ASSERT_EQ(stats.count, 1U);
+            ASSERT_EQ(stats.min_ts.value(), 2000U);
+            ASSERT_EQ(stats.max_ts.value(), 2100U);
+        }
+    }
+    ASSERT_TRUE(saw_track1);
+    ASSERT_TRUE(saw_track2);
+}
+
+// =============================================================================
+// Task 044: v3 track-type x schema switch-arm coverage.
+//   Fixture rocpd_v3_track_shapes.db carries exactly one track of each v3 dma /
+//   memory / cpu_thread shape the other v3 fixtures leave dark in get_track_stats
+//   / get_interval_track: dma queue-only / agent-only / queue+agent, memory
+//   queue+agent / queue-only / neither, and a cpu_thread SAMPLE track. Each test
+//   asserts exact min_ts / max_ts / count and interval start order
+//   (by-construction oracles), not merely that the call did not throw.
+// =============================================================================
+class reader_v3_track_shapes_test : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_storage = std::make_unique<profiler_hub::storage_t>(m_database_path, "");
+        m_reader  = std::make_shared<profiler_hub::reader_t>(std::move(m_storage));
+    }
+
+    void TearDown() override
+    {
+        m_reader.reset();
+        m_storage.reset();
+    }
+
+    std::string m_database_path{ ROCPD_DB_V3_TRACK_SHAPES_PATH };
+    std::unique_ptr<profiler_hub::storage_t> m_storage;
+    std::shared_ptr<profiler_hub::reader_t>  m_reader;
+};
+
+// dma queue+agent / queue-only / agent-only, for BOTH get_interval_track (the
+// memory_copy_interval_{qa,q_only,a_only} arms) and get_track_stats (the
+// memory_copy_stats_{qa,q_only,a_only} arms). Tracks are keyed by their unique
+// min_ts so the assertion is robust to discovery order.
+TEST_F(reader_v3_track_shapes_test, dma_shape_arms_interval_and_stats)
+{
+    auto tracks = find_tracks(m_reader->get_all_tracks(),
+                              profiler_hub::reader_types::track_type_t::dma);
+    ASSERT_EQ(tracks.size(), 3U);
+
+    // min_ts -> {expected max_ts, expected count}
+    const std::map<uint64_t, std::pair<uint64_t, size_t>> expected = {
+        { 1000U, { 1300U, 2U } },  // qa      (queue_id=1, dst_agent_id=1)
+        { 2000U, { 2300U, 2U } },  // q_only  (queue_id=2, dst_agent_id=NULL)
+        { 3000U, { 3100U, 1U } },  // a_only  (queue_id=NULL, dst_agent_id=2)
+    };
+
+    std::set<uint64_t> seen;
+    for(const auto& t : tracks)
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        auto stats     = m_reader->get_track_stats(t->id);
+        ASSERT_TRUE(is_start_sorted(intervals));
+        expect_stats_match_intervals(stats, intervals);
+
+        ASSERT_TRUE(stats.min_ts.has_value());
+        auto it = expected.find(stats.min_ts.value());
+        ASSERT_NE(it, expected.end()) << "unexpected dma track min_ts";
+        ASSERT_EQ(stats.max_ts.value(), it->second.first);
+        ASSERT_EQ(stats.count, it->second.second);
+        seen.insert(stats.min_ts.value());
+    }
+    ASSERT_EQ(seen.size(), 3U);
+}
+
+// memory queue+agent / queue-only / neither, for BOTH get_interval_track (the
+// memory_alloc_interval_{qa,q_only,neither} arms) and get_track_stats (the
+// memory_alloc_stats_{qa,q_only,neither} arms). (agent-only is covered by v3_edge.)
+TEST_F(reader_v3_track_shapes_test, memory_shape_arms_interval_and_stats)
+{
+    auto tracks = find_tracks(m_reader->get_all_tracks(),
+                              profiler_hub::reader_types::track_type_t::memory);
+    ASSERT_EQ(tracks.size(), 3U);
+
+    const std::map<uint64_t, std::pair<uint64_t, size_t>> expected = {
+        { 4000U, { 4300U, 2U } },  // qa      (agent_id=1, queue_id=1)
+        { 5000U, { 5300U, 2U } },  // q_only  (agent_id=NULL, queue_id=2)
+        { 6000U, { 6100U, 1U } },  // neither (agent_id=NULL, queue_id=NULL)
+    };
+
+    std::set<uint64_t> seen;
+    for(const auto& t : tracks)
+    {
+        auto intervals = m_reader->get_interval_track(t->id);
+        auto stats     = m_reader->get_track_stats(t->id);
+        ASSERT_TRUE(is_start_sorted(intervals));
+        expect_stats_match_intervals(stats, intervals);
+
+        ASSERT_TRUE(stats.min_ts.has_value());
+        auto it = expected.find(stats.min_ts.value());
+        ASSERT_NE(it, expected.end()) << "unexpected memory track min_ts";
+        ASSERT_EQ(stats.max_ts.value(), it->second.first);
+        ASSERT_EQ(stats.count, it->second.second);
+        seen.insert(stats.min_ts.value());
+    }
+    ASSERT_EQ(seen.size(), 3U);
+}
+
+// cpu_thread SAMPLE track: both regions' events carry a rocpd_sample, so the
+// (nid,pid,tid) region track is classified is_sample=1 and routes through
+// region_interval_track_sample / region_stats_track_sample (the arms v3_edge's
+// all-"main" cpu_thread track leaves dark).
+TEST_F(reader_v3_track_shapes_test, cpu_thread_sample_interval_and_stats)
+{
+    auto tracks = find_tracks(m_reader->get_all_tracks(),
+                              profiler_hub::reader_types::track_type_t::cpu_thread);
+    ASSERT_EQ(tracks.size(), 1U);
+
+    auto intervals = m_reader->get_interval_track(tracks.front()->id);
+    auto stats     = m_reader->get_track_stats(tracks.front()->id);
+
+    ASSERT_TRUE(is_start_sorted(intervals));
+    expect_stats_match_intervals(stats, intervals);
+
+    ASSERT_EQ(intervals.size(), 2U);
+    ASSERT_EQ(intervals[0].start, 7000U);
+    ASSERT_EQ(intervals[1].start, 7200U);
+    ASSERT_EQ(stats.count, 2U);
+    ASSERT_EQ(stats.min_ts.value(), 7000U);
+    ASSERT_EQ(stats.max_ts.value(), 7500U);
+}
+
 // =============================================================================
 // Task 014: ambiguous-pmc detection tests
 //

@@ -203,6 +203,55 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_dma_agent_fixture)
 
+# Synthetic v3 track-shapes fixture (task 044), generated at build time from
+# committed SQL against the canonical v3 schema (same mechanism as the edge
+# fixture above). Carries one track of each per-track_type x schema switch arm
+# the other v3 fixtures leave dark in get_track_stats / get_interval_track: dma
+# queue-only / agent-only / queue+agent, memory queue+agent / queue-only /
+# neither, and a cpu_thread SAMPLE track. See fixtures/rocpd_v3_track_shapes_data.sql.
+set(_v3s_uuid "00000000000000000000000000730003")
+set(_v3s_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3s_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_track_shapes_data.sql)
+set(_v3s_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_track_shapes_gen.sql)
+file(READ ${_v3s_schema_src} _v3s_schema)
+file(READ ${_v3s_data_src} _v3s_data)
+# Strip the trailing rocpd_metadata DML (double-quoted string literals the modern
+# sqlite3 CLI rejects in DML); the reader never reads metadata. See the edge block.
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3s_schema
+    "${_v3s_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3s_uuid}" _v3s_schema "${_v3s_schema}")
+string(REPLACE "{{guid}}" "${_v3s_uuid}" _v3s_schema "${_v3s_schema}")
+string(REPLACE "{{uuid}}" "_${_v3s_uuid}" _v3s_data "${_v3s_data}")
+string(REPLACE "{{guid}}" "${_v3s_uuid}" _v3s_data "${_v3s_data}")
+file(WRITE ${_v3s_gen_sql} "${_v3s_schema}\n${_v3s_data}\n")
+
+set(ROCPD_DB_V3_TRACK_SHAPES_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_track_shapes.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_TRACK_SHAPES_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_TRACK_SHAPES_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_TRACK_SHAPES_PATH}
+        ".read ${_v3s_gen_sql}"
+    DEPENDS ${_v3s_gen_sql} ${_v3s_schema_src} ${_v3s_data_src}
+    COMMENT "Generating synthetic v3 track-shapes test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_track_shapes_fixture
+    DEPENDS ${ROCPD_DB_V3_TRACK_SHAPES_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_track_shapes_fixture)
+
 # Synthetic v3 flow-clique fixture, generated at build time from committed SQL
 # against the canonical v3 schema (same mechanism as the edge fixture above).
 # Encodes non-flat stack cliques so get_flows() emits region->region + same-type
@@ -528,6 +577,7 @@ target_compile_definitions(
         ROCPD_DB_V4_COUNTER_PATH="${ROCPD_DB_V4_COUNTER_PATH}"
         ROCPD_DB_V3_EDGE_PATH="${ROCPD_DB_V3_EDGE_PATH}"
         ROCPD_DB_V3_DMA_AGENT_PATH="${ROCPD_DB_V3_DMA_AGENT_PATH}"
+        ROCPD_DB_V3_TRACK_SHAPES_PATH="${ROCPD_DB_V3_TRACK_SHAPES_PATH}"
         ROCPD_DB_V3_CLIQUE_PATH="${ROCPD_DB_V3_CLIQUE_PATH}"
         ROCPD_DB_V3_KD_PMC_PATH="${ROCPD_DB_V3_KD_PMC_PATH}"
         ROCPD_DB_V4_KD_PMC_PATH="${ROCPD_DB_V4_KD_PMC_PATH}"
