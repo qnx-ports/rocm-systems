@@ -350,6 +350,87 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_flow_order_fixture)
 
+# Synthetic v3 summary fixture (task 050). Same mechanism as the missing-meta /
+# flow-order blocks above. Two distinct kernel names + two distinct region names with
+# hand-chosen durations so get_kernel_summary / get_region_summary GROUP-BY-name
+# aggregates are by-construction oracles. See fixtures/rocpd_v3_summary_data.sql.
+set(_v3sum_uuid "00000000000000000000000000730050")
+set(_v3sum_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3sum_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_summary_data.sql)
+set(_v3sum_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_summary_gen.sql)
+file(READ ${_v3sum_schema_src} _v3sum_schema)
+file(READ ${_v3sum_data_src} _v3sum_data)
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3sum_schema
+    "${_v3sum_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3sum_uuid}" _v3sum_schema "${_v3sum_schema}")
+string(REPLACE "{{guid}}" "${_v3sum_uuid}" _v3sum_schema "${_v3sum_schema}")
+string(REPLACE "{{uuid}}" "_${_v3sum_uuid}" _v3sum_data "${_v3sum_data}")
+string(REPLACE "{{guid}}" "${_v3sum_uuid}" _v3sum_data "${_v3sum_data}")
+file(WRITE ${_v3sum_gen_sql} "${_v3sum_schema}\n${_v3sum_data}\n")
+
+set(ROCPD_DB_V3_SUMMARY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_summary.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_SUMMARY_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_SUMMARY_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_SUMMARY_PATH}
+        ".read ${_v3sum_gen_sql}"
+    DEPENDS ${_v3sum_gen_sql} ${_v3sum_schema_src} ${_v3sum_data_src}
+    COMMENT "Generating synthetic v3 summary test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_summary_fixture
+    DEPENDS ${ROCPD_DB_V3_SUMMARY_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_summary_fixture)
+
+# Synthetic v4.0 summary fixture (task 050). Same oracle as the v3 summary fixture but
+# durations come through the rocpd_timestamp spine, exercising the v4 backend of
+# get_kernel_summary / get_region_summary. See fixtures/rocpd_v4_summary_data.sql.
+set(_v4sum_uuid "00000000000000000000000000740050")
+set(_v4sum_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v4_summary_gen.sql)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql _v4sum_schema)
+file(READ ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_summary_data.sql _v4sum_data)
+string(REPLACE "{{uuid}}" "_${_v4sum_uuid}" _v4sum_schema "${_v4sum_schema}")
+string(REPLACE "{{guid}}" "${_v4sum_uuid}" _v4sum_schema "${_v4sum_schema}")
+string(REPLACE "{{uuid}}" "_${_v4sum_uuid}" _v4sum_data "${_v4sum_data}")
+string(REPLACE "{{guid}}" "${_v4sum_uuid}" _v4sum_data "${_v4sum_data}")
+file(WRITE ${_v4sum_gen_sql} "${_v4sum_schema}\n${_v4sum_data}\n")
+
+set(ROCPD_DB_V4_SUMMARY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v4_summary.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V4_SUMMARY_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V4_SUMMARY_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V4_SUMMARY_PATH}
+        ".read ${_v4sum_gen_sql}"
+    DEPENDS
+        ${_v4sum_gen_sql}
+        ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4.0_tables.sql
+        ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v4_summary_data.sql
+    COMMENT "Generating synthetic v4.0 summary test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v4_summary_fixture
+    DEPENDS ${ROCPD_DB_V4_SUMMARY_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v4_summary_fixture)
+
 # Synthetic v3 flow-clique fixture, generated at build time from committed SQL
 # against the canonical v3 schema (same mechanism as the edge fixture above).
 # Encodes non-flat stack cliques so get_flows() emits region->region + same-type
@@ -733,6 +814,8 @@ target_compile_definitions(
         ROCPD_DB_V3_AMB_PMC_PATH="${ROCPD_DB_V3_AMB_PMC_PATH}"
         ROCPD_DB_V4_AMB_PMC_PATH="${ROCPD_DB_V4_AMB_PMC_PATH}"
         ROCPD_DB_V4_AMB_CLS_PATH="${ROCPD_DB_V4_AMB_CLS_PATH}"
+        ROCPD_DB_V3_SUMMARY_PATH="${ROCPD_DB_V3_SUMMARY_PATH}"
+        ROCPD_DB_V4_SUMMARY_PATH="${ROCPD_DB_V4_SUMMARY_PATH}"
 )
 
 target_include_directories(
