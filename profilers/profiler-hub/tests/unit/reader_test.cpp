@@ -2962,6 +2962,168 @@ TEST_F(reader_v3_clique_test, get_flows_in_window_decimates_by_latency_stably)
 }
 
 // ============================================================================
+// get_flows() ordering / tie-break tests — v3 synthetic flow-order fixture
+// (rocpd_v3_flow_order.db). Built at configure time from
+// fixtures/rocpd_v3_flow_order_data.sql + the canonical v3 schema. The clique
+// fixture above gives every clique DISTINCT endpoint starts and every same-source
+// leg a DISTINCT latency, so it never exercises the equal-start direction tie-break
+// (reader_impl.cpp:2841-2842) nor the windowed decimation's final dest tie-break
+// (:3033). This fixture crafts exactly those two degenerate-but-legitimate shapes
+// (two endpoints at an identical start; two same-source legs at identical latency)
+// and asserts the EXACT resulting direction / survivor. See the fixture header.
+// ============================================================================
+
+class reader_v3_flow_order_test : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_storage = std::make_unique<profiler_hub::storage_t>(m_database_path, "");
+        m_reader  = std::make_shared<profiler_hub::reader_t>(std::move(m_storage));
+    }
+
+    void TearDown() override
+    {
+        m_reader.reset();
+        m_storage.reset();
+    }
+
+    std::string m_database_path{ ROCPD_DB_V3_FLOW_ORDER_PATH };
+    std::unique_ptr<profiler_hub::storage_t> m_storage;
+    std::shared_ptr<profiler_hub::reader_t>  m_reader;
+};
+
+TEST_F(reader_v3_flow_order_test, equal_start_region_pair_tie_breaks_by_handle_order)
+{
+    using et = profiler_hub::reader_types::event_type_t;
+    using fk = profiler_hub::reader_types::flow_kind_t;
+    // reader_impl.cpp:2841-2842. Stack 1000 = { region 1, region 2 } BOTH start 5000,
+    // parent_stack_id NULL. Neither parent-lineage branch fires and the start-ts branch
+    // cannot decide (starts are identical), so direction falls to the deterministic
+    // equal-start tie-break: src = key.first (the lower event_id_t handle), dst =
+    // key.second. region 1 (row id 1) mints a lower handle than region 2, so the single
+    // surviving directed edge MUST be region 1 -> region 2 (never the reverse).
+    const auto r1 = make_event_id(et::region, 1);
+    const auto r2 = make_event_id(et::region, 2);
+    ASSERT_TRUE(r1 < r2) << "test premise: lower row id mints the lower handle";
+
+    int  seen  = 0;
+    auto flows = m_reader->get_flows();
+    for(const auto& f : flows)
+    {
+        if(flow_id_value(f.flow_id) != 1000) continue;
+        ++seen;
+        EXPECT_EQ(f.source, r1);  // equal starts -> lower handle is source
+        EXPECT_EQ(f.dest, r2);
+        EXPECT_EQ(f.kind, fk::generic);  // region -> region
+        EXPECT_TRUE(f.source < f.dest);  // the tie-break invariant itself
+    }
+    EXPECT_EQ(seen, 1) << "the symmetric (region2,region1) pair must de-dup to one edge";
+}
+
+TEST_F(reader_v3_flow_order_test, equal_start_kd_siblings_tie_break_by_handle_order)
+{
+    using et = profiler_hub::reader_types::event_type_t;
+    using fk = profiler_hub::reader_types::flow_kind_t;
+    // reader_impl.cpp:2841-2842 on the same-type sibling path. Stack 3000 =
+    // { kd 2, kd 3 } BOTH start 7000. Same equal-start tie-break: src = lower handle
+    // = kd 2, dst = kd 3, kind stream_dependency (kd<->kd sibling).
+    const auto k2 = make_event_id(et::kernel_dispatch, 2);
+    const auto k3 = make_event_id(et::kernel_dispatch, 3);
+    ASSERT_TRUE(k2 < k3);
+
+    int  seen  = 0;
+    auto flows = m_reader->get_flows();
+    for(const auto& f : flows)
+    {
+        if(flow_id_value(f.flow_id) != 3000) continue;
+        ++seen;
+        EXPECT_EQ(f.source, k2);
+        EXPECT_EQ(f.dest, k3);
+        EXPECT_EQ(f.kind, fk::stream_dependency);
+        EXPECT_TRUE(f.source < f.dest);
+    }
+    EXPECT_EQ(seen, 1);
+}
+
+TEST_F(reader_v3_flow_order_test, window_decimation_tie_breaks_equal_latency_by_dest)
+{
+    using et = profiler_hub::reader_types::event_type_t;
+    // reader_impl.cpp:3033 (`return a.dest < b.dest`). Stack 2000: region 3 [6000,6500]
+    // sources kd 1 (start 6100) and mc 1 (start 6200); both children start BEFORE
+    // region 3 ends, so both arrow-span latencies (dst.start - src.end) clamp to 0 ->
+    // EQUAL latency, and both share source region 3. A window that admits only these two
+    // edges, capped at max_edges = 1, forces the decimation std::sort to compare two
+    // flows with equal latency AND equal source -> the final tie-break `a.dest < b.dest`
+    // decides. kd 1's handle < mc 1's handle (event_type kernel_dispatch < memory_copy),
+    // so the survivor MUST be region 3 -> kd 1.
+    profiler_hub::reader_types::time_window_t win;
+    win.start = 6000;
+    win.end   = 6600;  // excludes the stack-1000 (5000) and stack-3000 (7000) edges
+
+    // Uncapped, the window admits exactly the two zero-latency same-source legs.
+    auto both = m_reader->get_flows_in_window({}, win, 0);
+    ASSERT_EQ(both.size(), 2U);
+    for(const auto& f : both)
+        EXPECT_EQ(f.source, make_event_id(et::region, 3));
+
+    // Capped at 1: the equal-latency, equal-source pair is tie-broken by dest handle,
+    // keeping the lower dest (kd 1) and dropping mc 1.
+    auto top1 = m_reader->get_flows_in_window({}, win, 1);
+    ASSERT_EQ(top1.size(), 1U);
+    EXPECT_EQ(top1.front().source, make_event_id(et::region, 3));
+    EXPECT_EQ(top1.front().dest, make_event_id(et::kernel_dispatch, 1));
+
+    // Deterministic across calls (stable ranking, the design contract 3033 backstops).
+    auto again = m_reader->get_flows_in_window({}, win, 1);
+    ASSERT_EQ(again.size(), 1U);
+    EXPECT_EQ(again.front().source, top1.front().source);
+    EXPECT_EQ(again.front().dest, top1.front().dest);
+}
+
+TEST_F(reader_v3_flow_order_test, full_flow_set_matches_oracle)
+{
+    using et         = profiler_hub::reader_types::event_type_t;
+    using fk         = profiler_hub::reader_types::flow_kind_t;
+    using flow_key_t = std::pair<profiler_hub::reader_types::event_id_t,
+                                 profiler_hub::reader_types::event_id_t>;
+    // The complete directed oracle for this fixture: 4 edges. Pins the equal-start pairs
+    // and the two zero-latency region-3 legs so a future fixture edit cannot silently
+    // change the flow set out from under the tie-break tests above.
+    auto flows = m_reader->get_flows();
+    ASSERT_EQ(flows.size(), 4U);
+
+    std::map<flow_key_t, std::pair<fk, uint64_t>> got;
+    for(const auto& f : flows)
+        got.emplace(flow_key_t{ f.source, f.dest },
+                    std::make_pair(f.kind, flow_id_value(f.flow_id)));
+
+    auto expect_edge = [&](profiler_hub::reader_types::event_id_t s,
+                           profiler_hub::reader_types::event_id_t d,
+                           fk                                     kind,
+                           uint64_t                               fid) {
+        auto it = got.find(flow_key_t{ s, d });
+        ASSERT_NE(it, got.end()) << "missing directed edge";
+        EXPECT_EQ(it->second.first, kind);
+        EXPECT_EQ(it->second.second, fid);
+    };
+    expect_edge(
+        make_event_id(et::region, 1), make_event_id(et::region, 2), fk::generic, 1000);
+    expect_edge(make_event_id(et::region, 3),
+                make_event_id(et::kernel_dispatch, 1),
+                fk::launch_to_dispatch,
+                2000);
+    expect_edge(make_event_id(et::region, 3),
+                make_event_id(et::memory_copy, 1),
+                fk::copy_submit_to_exec,
+                2000);
+    expect_edge(make_event_id(et::kernel_dispatch, 2),
+                make_event_id(et::kernel_dispatch, 3),
+                fk::stream_dependency,
+                3000);
+}
+
+// ============================================================================
 // Track-scoped API tests — v4.0 real fixture (rocpd_v4.db)
 // cpu_thread + gpu_queue + dma interval tracks and flows. This fixture has no
 // counter samples, so the scalar path is covered by reader_v4_counter_test.

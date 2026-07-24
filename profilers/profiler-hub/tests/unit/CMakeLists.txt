@@ -302,6 +302,54 @@ add_custom_target(
 )
 add_dependencies(profiler-hub_unit_tests profiler-hub_v3_missing_meta_fixture)
 
+# Synthetic v3 flow-ordering / tie-break fixture (task 049). Same mechanism as the
+# missing-meta block above. Cliques crafted so two flow-builder ordering branches
+# fire that no committed fixture reaches: get_flows() equal-start deterministic
+# tie-break (reader_impl.cpp:2841-2842) and the get_flows_in_window decimation-sort
+# final tie-break `a.dest < b.dest` (:3033). See fixtures/rocpd_v3_flow_order_data.sql.
+set(_v3fo_uuid "00000000000000000000000000730049")
+set(_v3fo_schema_src
+    ${CMAKE_SOURCE_DIR}/source/data_storage/schema/rocpd_tables.sql
+)
+set(_v3fo_data_src ${CMAKE_CURRENT_LIST_DIR}/fixtures/rocpd_v3_flow_order_data.sql)
+set(_v3fo_gen_sql ${CMAKE_CURRENT_BINARY_DIR}/rocpd_v3_flow_order_gen.sql)
+file(READ ${_v3fo_schema_src} _v3fo_schema)
+file(READ ${_v3fo_data_src} _v3fo_data)
+# Strip the trailing rocpd_metadata DML (double-quoted string literals the modern
+# sqlite3 CLI rejects in DML); the reader never reads metadata. See the edge block.
+string(
+    REGEX REPLACE
+    "INSERT INTO[^;]*rocpd_metadata[^;]*;"
+    ""
+    _v3fo_schema
+    "${_v3fo_schema}"
+)
+string(REPLACE "{{uuid}}" "_${_v3fo_uuid}" _v3fo_schema "${_v3fo_schema}")
+string(REPLACE "{{guid}}" "${_v3fo_uuid}" _v3fo_schema "${_v3fo_schema}")
+string(REPLACE "{{uuid}}" "_${_v3fo_uuid}" _v3fo_data "${_v3fo_data}")
+string(REPLACE "{{guid}}" "${_v3fo_uuid}" _v3fo_data "${_v3fo_data}")
+file(WRITE ${_v3fo_gen_sql} "${_v3fo_schema}\n${_v3fo_data}\n")
+
+set(ROCPD_DB_V3_FLOW_ORDER_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/rocpd_v3_flow_order.db
+)
+add_custom_command(
+    OUTPUT ${ROCPD_DB_V3_FLOW_ORDER_PATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${ROCPD_DB_V3_FLOW_ORDER_PATH}
+    COMMAND
+        ${SQLITE3_EXECUTABLE} ${ROCPD_DB_V3_FLOW_ORDER_PATH}
+        ".read ${_v3fo_gen_sql}"
+    DEPENDS ${_v3fo_gen_sql} ${_v3fo_schema_src} ${_v3fo_data_src}
+    COMMENT "Generating synthetic v3 flow-ordering test fixture"
+    VERBATIM
+)
+add_custom_target(
+    profiler-hub_v3_flow_order_fixture
+    DEPENDS ${ROCPD_DB_V3_FLOW_ORDER_PATH}
+)
+add_dependencies(profiler-hub_unit_tests profiler-hub_v3_flow_order_fixture)
+
 # Synthetic v3 flow-clique fixture, generated at build time from committed SQL
 # against the canonical v3 schema (same mechanism as the edge fixture above).
 # Encodes non-flat stack cliques so get_flows() emits region->region + same-type
@@ -675,6 +723,7 @@ target_compile_definitions(
         ROCPD_DB_V3_DMA_AGENT_PATH="${ROCPD_DB_V3_DMA_AGENT_PATH}"
         ROCPD_DB_V3_TRACK_SHAPES_PATH="${ROCPD_DB_V3_TRACK_SHAPES_PATH}"
         ROCPD_DB_V3_MISSING_META_PATH="${ROCPD_DB_V3_MISSING_META_PATH}"
+        ROCPD_DB_V3_FLOW_ORDER_PATH="${ROCPD_DB_V3_FLOW_ORDER_PATH}"
         ROCPD_DB_V3_CLIQUE_PATH="${ROCPD_DB_V3_CLIQUE_PATH}"
         ROCPD_DB_V3_KD_PMC_PATH="${ROCPD_DB_V3_KD_PMC_PATH}"
         ROCPD_DB_V4_KD_PMC_PATH="${ROCPD_DB_V4_KD_PMC_PATH}"
