@@ -1030,6 +1030,20 @@ TEST_F(reader_test, get_event_info_returns_nullopt_for_invalid_handle)
     EXPECT_FALSE(detail.has_value());
 }
 
+TEST_F(reader_test, get_event_info_returns_nullopt_for_out_of_range_event_type)
+{
+    // get_event_info's switch dispatches on the handle's event_type_t; a handle whose
+    // type matches no enumerator falls through to the default guard -> nullopt (distinct
+    // from the invalid-handle case above, which carries a VALID type but a missing row).
+    // event_type_t is a scoped enum with no explicit base, so its underlying type is
+    // fixed to int -- static_cast of a non-enumerator value that fits int is
+    // well-defined, not UB.
+    constexpr auto out_of_range =
+        static_cast<profiler_hub::reader_types::event_type_t>(6);  // == enumerator count
+    auto detail = m_reader->get_event_info(make_event_id(out_of_range, 1));
+    EXPECT_FALSE(detail.has_value());
+}
+
 // ============================================================================
 // Event property tests
 // ============================================================================
