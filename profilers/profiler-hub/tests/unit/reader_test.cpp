@@ -4592,6 +4592,15 @@ TEST_F(reader_v3_missing_meta_test, agent_with_null_type_index_is_dropped)
     EXPECT_EQ(agents.front()->name, "Synthetic GPU 0");
 }
 
+// Constructing a reader from a null storage pointer trips the impl ctor guard
+// (reader_impl.cpp:58) that throws std::invalid_argument. No fixture involved --
+// this is the empty-input boundary of the reader's own construction.
+TEST(reader_construction_test, null_storage_throws_invalid_argument)
+{
+    EXPECT_THROW(profiler_hub::reader_t{ std::unique_ptr<profiler_hub::storage_t>{} },
+                 std::invalid_argument);
+}
+
 // =============================================================================
 // Task 014: ambiguous-pmc detection tests
 //
