@@ -186,6 +186,45 @@ expect_stats_match_scalars(const profiler_hub::reader_types::track_stats_t&     
     ASSERT_EQ(stats.max_ts.value(), max_ts);
 }
 
+// Element-by-element equality of two scalar slices: opaque-handle routing
+// (type + row id), timestamp, and value. Used by the pagination boundary tests
+// to prove a paginated slice is the exact ordered sub-range of the full slice --
+// locking in both slicing AND ordering, not just size.
+void
+expect_scalar_events_eq(const profiler_hub::reader_types::scalar_event_list_t& got,
+                        const profiler_hub::reader_types::scalar_event_list_t& expected)
+{
+    ASSERT_EQ(got.size(), expected.size());
+    for(size_t i = 0; i < expected.size(); ++i)
+    {
+        EXPECT_EQ(type_of(got[i].id), type_of(expected[i].id)) << "at index " << i;
+        EXPECT_EQ(row_id_of(got[i].id), row_id_of(expected[i].id)) << "at index " << i;
+        EXPECT_EQ(got[i].timestamp, expected[i].timestamp) << "at index " << i;
+        EXPECT_EQ(got[i].value, expected[i].value) << "at index " << i;
+    }
+}
+
+// Element-by-element equality of two timeline slices: event identity
+// (type + id) and start/end timestamps. Counterpart to expect_scalar_events_eq
+// for the get_events / apply_pagination path.
+void
+expect_timeline_events_eq(
+    const profiler_hub::reader_types::timeline_event_list_t& got,
+    const profiler_hub::reader_types::timeline_event_list_t& expected)
+{
+    ASSERT_EQ(got.size(), expected.size());
+    for(size_t i = 0; i < expected.size(); ++i)
+    {
+        EXPECT_EQ(got[i].unique_identifier.type, expected[i].unique_identifier.type)
+            << "at index " << i;
+        EXPECT_EQ(got[i].unique_identifier.id, expected[i].unique_identifier.id)
+            << "at index " << i;
+        EXPECT_EQ(got[i].start_timestamp, expected[i].start_timestamp)
+            << "at index " << i;
+        EXPECT_EQ(got[i].end_timestamp, expected[i].end_timestamp) << "at index " << i;
+    }
+}
+
 class reader_test : public ::testing::Test
 {
 protected:
@@ -466,6 +505,160 @@ TEST_F(reader_test, get_events_with_pagination_offset)
     auto offset_events = m_reader->get_events(filter);
 
     ASSERT_EQ(offset_events.size(), all_events.size() - 2);
+}
+
+// ============================================================================
+// Pagination boundary cases (task 046). Two distinct pagination code paths:
+//   * paginate<scalar_event_t> (reader_impl.cpp anon-ns template) via
+//     get_scalar_track on a counter track -- never exercised before this suite;
+//     only the timeline_event_t instantiation was covered.
+//   * apply_pagination(timeline_event_list_t) via get_events, specifically the
+//     offset >= size() overflow branch that clear()s the result.
+// Each paginated slice is asserted element-by-element against the exact
+// sub-range of the full unpaginated slice, so ordering + slicing are both
+// locked in. Sizes are derived at runtime (never hardcoded) so the tests stay
+// robust to fixture changes.
+// ============================================================================
+
+// Locate the first counter track and its full (unpaginated) scalar slice; skip
+// nothing -- a missing counter track is a fixture regression, so ASSERT.
+static profiler_hub::reader_types::scalar_event_list_t
+full_counter_slice(profiler_hub::reader_t& reader, size_t& track_id_out)
+{
+    auto tracks = reader.get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    EXPECT_NE(counter, nullptr);
+    track_id_out = counter ? counter->id : 0;
+    return counter ? reader.get_scalar_track(counter->id)
+                   : profiler_hub::reader_types::scalar_event_list_t{};
+}
+
+TEST_F(reader_test, get_scalar_track_pagination_offset_zero_is_identity)
+{
+    size_t     track_id = 0;
+    const auto full     = full_counter_slice(*m_reader, track_id);
+    ASSERT_GE(full.size(), 5U);  // need a handful of samples for meaningful windows
+
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.pagination = { std::nullopt, 0 };  // limit unset, offset 0
+    const auto paged  = m_reader->get_scalar_track(track_id, filter);
+
+    expect_scalar_events_eq(paged, full);
+}
+
+TEST_F(reader_test, get_scalar_track_pagination_offset_overflow_returns_empty)
+{
+    size_t     track_id = 0;
+    const auto full     = full_counter_slice(*m_reader, track_id);
+    ASSERT_GE(full.size(), 5U);
+
+    // Exact boundary: offset == size() triggers the clear() branch.
+    profiler_hub::reader_types::event_filter_t at_boundary;
+    at_boundary.pagination = { std::nullopt, full.size() };
+    EXPECT_TRUE(m_reader->get_scalar_track(track_id, at_boundary).empty());
+
+    // Well past the end: offset > size() also clears.
+    profiler_hub::reader_types::event_filter_t past_end;
+    past_end.pagination = { std::nullopt, full.size() + 7 };
+    EXPECT_TRUE(m_reader->get_scalar_track(track_id, past_end).empty());
+}
+
+TEST_F(reader_test, get_scalar_track_pagination_limit_less_than_size)
+{
+    size_t     track_id = 0;
+    const auto full     = full_counter_slice(*m_reader, track_id);
+    ASSERT_GE(full.size(), 5U);
+
+    const size_t                               lim = 3;  // < size
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.pagination = { lim, std::nullopt };
+    const auto paged  = m_reader->get_scalar_track(track_id, filter);
+
+    ASSERT_EQ(paged.size(), lim);
+    expect_scalar_events_eq(paged,
+                            { full.begin(), full.begin() + static_cast<ptrdiff_t>(lim) });
+}
+
+TEST_F(reader_test, get_scalar_track_pagination_limit_ge_size_returns_full)
+{
+    size_t     track_id = 0;
+    const auto full     = full_counter_slice(*m_reader, track_id);
+    ASSERT_GE(full.size(), 5U);
+
+    // limit == size (exact) and limit > size both return the whole slice.
+    profiler_hub::reader_types::event_filter_t at_size;
+    at_size.pagination = { full.size(), std::nullopt };
+    expect_scalar_events_eq(m_reader->get_scalar_track(track_id, at_size), full);
+
+    profiler_hub::reader_types::event_filter_t over_size;
+    over_size.pagination = { full.size() + 10, std::nullopt };
+    expect_scalar_events_eq(m_reader->get_scalar_track(track_id, over_size), full);
+}
+
+TEST_F(reader_test, get_scalar_track_pagination_midrange_window)
+{
+    size_t     track_id = 0;
+    const auto full     = full_counter_slice(*m_reader, track_id);
+    ASSERT_GE(full.size(), 5U);
+
+    const size_t                               off = 2;
+    const size_t                               lim = 3;  // off + lim <= 5 <= size
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.pagination = { lim, off };
+    const auto paged  = m_reader->get_scalar_track(track_id, filter);
+
+    ASSERT_EQ(paged.size(), lim);
+    expect_scalar_events_eq(paged,
+                            { full.begin() + static_cast<ptrdiff_t>(off),
+                              full.begin() + static_cast<ptrdiff_t>(off + lim) });
+}
+
+TEST_F(reader_test, get_events_pagination_offset_overflow_returns_empty)
+{
+    const auto all = m_reader->get_events();
+    ASSERT_GT(all.size(), 0U);
+
+    // offset == size() hits apply_pagination's overflow clear() branch.
+    profiler_hub::reader_types::event_filter_t at_boundary;
+    at_boundary.pagination = { std::nullopt, all.size() };
+    EXPECT_TRUE(m_reader->get_events(at_boundary).empty());
+
+    // offset > size() clears too.
+    profiler_hub::reader_types::event_filter_t past_end;
+    past_end.pagination = { std::nullopt, all.size() + 13 };
+    EXPECT_TRUE(m_reader->get_events(past_end).empty());
+}
+
+TEST_F(reader_test, get_events_pagination_limit_ge_size_returns_full)
+{
+    const auto all = m_reader->get_events();
+    ASSERT_GT(all.size(), 0U);
+
+    profiler_hub::reader_types::event_filter_t at_size;
+    at_size.pagination = { all.size(), std::nullopt };
+    expect_timeline_events_eq(m_reader->get_events(at_size), all);
+
+    profiler_hub::reader_types::event_filter_t over_size;
+    over_size.pagination = { all.size() + 25, std::nullopt };
+    expect_timeline_events_eq(m_reader->get_events(over_size), all);
+}
+
+TEST_F(reader_test, get_events_pagination_midrange_window)
+{
+    const auto all = m_reader->get_events();
+    ASSERT_GE(all.size(), 8U);
+
+    const size_t                               off = 3;
+    const size_t                               lim = 5;  // off + lim == 8 <= size
+    profiler_hub::reader_types::event_filter_t filter;
+    filter.pagination = { lim, off };
+    const auto paged  = m_reader->get_events(filter);
+
+    ASSERT_EQ(paged.size(), lim);
+    expect_timeline_events_eq(paged,
+                              { all.begin() + static_cast<ptrdiff_t>(off),
+                                all.begin() + static_cast<ptrdiff_t>(off + lim) });
 }
 
 TEST_F(reader_test, get_events_for_track_returns_events)
