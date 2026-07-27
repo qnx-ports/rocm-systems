@@ -11,6 +11,14 @@ Full documentation for ROCm Systems Profiler is available at [https://rocm.docs.
 - `ROCPROFSYS_SAMPLING_GPUS` is now restricted by the GPUs the ROCm runtime exposes
   via `ROCR_VISIBLE_DEVICES` / `HIP_VISIBLE_DEVICES`.
 
+### Fixed
+
+- `ROCPROFSYS_TRACE_DELAY`/`ROCPROFSYS_TRACE_DURATION` now actually gate GPU context
+  startup, producing a real gap in cached GPU/RocPD data. Previously they only
+  suppressed downstream category emission. For GPU-only tracing with no marker
+  domain or trace region configured, the configured delay had no effect at all on
+  when GPU data collection actually began.
+
 ### Removed
 
 - Removed the `ROCPROFSYS_BUILD_SQLITE3` CMake option and the in-tree SQLite3/rocpd
