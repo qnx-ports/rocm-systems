@@ -243,7 +243,7 @@ def _pad_to(lines: list[str], target: int) -> list[str]:
 def _build_kernel_panel() -> Panel:
     """Build the Kernel (shader core) panel at full diagram height."""
     return Panel(
-        "\n" * 6 + "[dim]Shader Core[/dim]\n[dim]Wave Execution[/dim]",
+        "\n" * 13 + "[dim]Shader Core[/dim]\n[dim]Wave Execution[/dim]",
         title=f"[bold {COLORS['kernel']}]Kernel[/bold {COLORS['kernel']}]",
         border_style=COLORS["kernel"],
         width=14,
@@ -298,14 +298,14 @@ def _build_request_edges(
             colored(arrow_right, color_write),
             colored(lds_at, color_atomic),
             colored(arrow_both, color_atomic),
-            colored(lds_instr, color_read),
-            colored(arrow_both, color_read),
+            colored(lds_instr, "black"),
+            colored(arrow_both, "black"),
         ]
     else:
         lds_lines = [
             "[white]LDS[/white]",
-            f"[{color_read}]{format_edge('Instr', metrics['lds_req'])}[/{color_read}]",
-            f"[{color_read}]{arrow_both}[/{color_read}]",
+            f"[black]{format_edge('Instr', metrics['lds_req'])}[/black]",
+            f"[black]{arrow_both}[/black]",
         ]
 
     # sL1D scope — SMEM
@@ -345,10 +345,9 @@ def _build_l1_stack(metrics: dict[str, Any]) -> Table:
     )
 
     lds_panel = Panel(
-        f"{metric_line('Util', metrics['lds_util'], '%', COLORS['util'])}\n"
-        f"[dim]{progress_bar(metrics['lds_util'])}[/dim]",
-        title=f"[bold {COLORS['lds']}]LDS[/bold {COLORS['lds']}]",
-        border_style=COLORS["lds"],
+        "",
+        title=f"[bold {color_block}]LDS[/bold {color_block}]",
+        border_style=color_block,
         width=20,
         height=_LDS_H,
     )
@@ -406,6 +405,7 @@ def _build_l1_l2_edges(
     color_l1i = bw_color(metrics.get("il1_l2_rd_bytes"), l1i_peak, COLORS["read"])
 
     vl1d_lines = [
+        "",
         f"[{color_read}]Read BW[/{color_read}]",
         f"[{color_read}]{vl1_rd_bw}[/{color_read}]",
         f"[{color_read}]{arrow_left}[/{color_read}]",
@@ -507,8 +507,8 @@ def _build_xgmi_row(console: Console, metrics: dict[str, Any]) -> None:
 
     xgmi_panel = Panel(
         "[dim]XGMI (to Peer GPU)[/dim]",
-        border_style="bright_yellow",
-        width=30,
+        border_style=COLORS["block"],
+        width=24,
         height=3,
     )
     xgmi_layout = Table.grid(padding=0)
@@ -545,8 +545,8 @@ def _build_pcie_row(console: Console, metrics: dict[str, Any]) -> None:
 
     pcie_panel = Panel(
         "[dim]PCIe (to CPU or Non-XGMI connected GPU)[/dim]",
-        border_style="dark_olive_green3",
-        width=50,
+        border_style=COLORS["block"],
+        width=46,
         height=3,
     )
     pcie_layout = Table.grid(padding=0)
@@ -619,11 +619,10 @@ def create_mem_chart_diagram(
     l1_l2_edges = _build_l1_l2_edges(metrics, std_arrows, peak_bw)
     l2 = _build_l2_panel(metrics)
     l2_fab_edges = _build_l2_fabric_edges(metrics, std_arrows, peak_bw)
-    fabric = _ip_block("Data Fabric", 22, "bright_magenta")
-    mall = _ip_block("MALL", 18, "indian_red")
-    umc = _ip_block("UMC", 8)
-    hbm_content = "\n\n[bold bright_green]HBM[/bold bright_green]"
-    hbm = _ip_block("HBM", 10, "bright_yellow", hbm_content)
+    fabric = _ip_block("Data Fabric", 22, COLORS["block"])
+    mall = _ip_block("MALL", 18, COLORS["block"])
+    umc = _ip_block("UMC", 8, COLORS["block"])
+    hbm = _ip_block("HBM", 10, COLORS["block"])
 
     main_layout = Table.grid(padding=0)
     for _ in range(10):
