@@ -523,21 +523,22 @@ TEST_F(reader_test, get_events_with_pagination_offset)
 // Locate the first counter track and its full (unpaginated) scalar slice; skip
 // nothing -- a missing counter track is a fixture regression, so ASSERT.
 static profiler_hub::reader_types::scalar_sample_list_t
-full_counter_slice(profiler_hub::reader_t& reader, size_t& track_id_out)
+full_counter_slice(profiler_hub::reader_t&                 reader,
+                   profiler_hub::reader_types::track_id_t& track_id_out)
 {
     auto tracks = reader.get_tracks();
     auto counter =
         find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
     EXPECT_NE(counter, nullptr);
-    track_id_out = counter ? counter->id : 0;
+    track_id_out = counter ? counter->id : profiler_hub::reader_types::track_id_t{};
     return counter ? reader.get_scalar_track(counter->id)
                    : profiler_hub::reader_types::scalar_sample_list_t{};
 }
 
 TEST_F(reader_test, get_scalar_track_pagination_offset_zero_is_identity)
 {
-    size_t     track_id = 0;
-    const auto full     = full_counter_slice(*m_reader, track_id);
+    profiler_hub::reader_types::track_id_t track_id{};
+    const auto full = full_counter_slice(*m_reader, track_id);
     ASSERT_GE(full.size(), 5U);  // need a handful of samples for meaningful windows
 
     profiler_hub::reader_types::event_filter_t filter;
@@ -549,8 +550,8 @@ TEST_F(reader_test, get_scalar_track_pagination_offset_zero_is_identity)
 
 TEST_F(reader_test, get_scalar_track_pagination_offset_overflow_returns_empty)
 {
-    size_t     track_id = 0;
-    const auto full     = full_counter_slice(*m_reader, track_id);
+    profiler_hub::reader_types::track_id_t track_id{};
+    const auto full = full_counter_slice(*m_reader, track_id);
     ASSERT_GE(full.size(), 5U);
 
     // Exact boundary: offset == size() triggers the clear() branch.
@@ -566,8 +567,8 @@ TEST_F(reader_test, get_scalar_track_pagination_offset_overflow_returns_empty)
 
 TEST_F(reader_test, get_scalar_track_pagination_limit_less_than_size)
 {
-    size_t     track_id = 0;
-    const auto full     = full_counter_slice(*m_reader, track_id);
+    profiler_hub::reader_types::track_id_t track_id{};
+    const auto full = full_counter_slice(*m_reader, track_id);
     ASSERT_GE(full.size(), 5U);
 
     const size_t                               lim = 3;  // < size
@@ -582,8 +583,8 @@ TEST_F(reader_test, get_scalar_track_pagination_limit_less_than_size)
 
 TEST_F(reader_test, get_scalar_track_pagination_limit_ge_size_returns_full)
 {
-    size_t     track_id = 0;
-    const auto full     = full_counter_slice(*m_reader, track_id);
+    profiler_hub::reader_types::track_id_t track_id{};
+    const auto full = full_counter_slice(*m_reader, track_id);
     ASSERT_GE(full.size(), 5U);
 
     // limit == size (exact) and limit > size both return the whole slice.
@@ -598,8 +599,8 @@ TEST_F(reader_test, get_scalar_track_pagination_limit_ge_size_returns_full)
 
 TEST_F(reader_test, get_scalar_track_pagination_midrange_window)
 {
-    size_t     track_id = 0;
-    const auto full     = full_counter_slice(*m_reader, track_id);
+    profiler_hub::reader_types::track_id_t track_id{};
+    const auto full = full_counter_slice(*m_reader, track_id);
     ASSERT_GE(full.size(), 5U);
 
     const size_t                               off = 2;
@@ -1764,26 +1765,26 @@ TEST_F(reader_test, v3_counter_tracks_resolve_deterministic_pmc)
     std::set<std::string> resolved_identities;
     for(const auto& t : counters)
     {
-        auto it = expected.find(t->id);
-        ASSERT_NE(it, expected.end()) << "unexpected counter track id " << t->id;
+        auto it = expected.find(t->id.value);
+        ASSERT_NE(it, expected.end()) << "unexpected counter track id " << t->id.value;
         const auto& exp = it->second;
 
         // The fix attaches the deterministically-resolved pmc panel to each track...
-        ASSERT_NE(t->pmc_info, nullptr) << "track " << t->id << " missing pmc_info";
+        ASSERT_NE(t->pmc_info, nullptr) << "track " << t->id.value << " missing pmc_info";
         // ...and (005B-4-fix-1-fix-2) exposes that pmc's numeric id on every counter
         // track.
         ASSERT_NE(t->pmc_info->pmc_id, 0U)
-            << "track " << t->id << " missing numeric pmc_id";
-        ASSERT_EQ(t->pmc_info->name, exp.metric) << "track " << t->id;
+            << "track " << t->id.value << " missing numeric pmc_id";
+        ASSERT_EQ(t->pmc_info->name, exp.metric) << "track " << t->id.value;
         // ...and corrects the Q9 display name to that same pmc's name (previously the
         // arbitrary fanned name, wrong on 45 of 54 tracks).
-        ASSERT_EQ(t->name, t->pmc_info->name) << "track " << t->id;
+        ASSERT_EQ(t->name, t->pmc_info->name) << "track " << t->id.value;
         // Agent scoping: the resolved pmc belongs to the agent the track name names.
-        ASSERT_NE(t->pmc_info->agent_info, nullptr) << "track " << t->id;
+        ASSERT_NE(t->pmc_info->agent_info, nullptr) << "track " << t->id.value;
         ASSERT_EQ(t->pmc_info->agent_info->agent_type, exp.agent_type)
-            << "track " << t->id;
+            << "track " << t->id.value;
         ASSERT_EQ(t->pmc_info->agent_info->type_index, exp.type_index)
-            << "track " << t->id;
+            << "track " << t->id.value;
 
         // Each resolved (metric, agent) identity must be unique across the 54 tracks --
         // proves the true 1:1 track<->pmc mapping, not an arbitrary fan-out duplicate.
@@ -1825,7 +1826,7 @@ TEST_F(reader_test, v3_scalar_value_query_strips_pmc_fanout)
     // 005B-4-fix-1-fix-2: gfx0 is track 12 in this committed fixture; its exposed numeric
     // pmc_id must be the resolver's rn=1 pick (pmc 1796), not 0 or a fanned-out
     // neighbour.
-    EXPECT_EQ(gfx0->id, 12U);
+    EXPECT_EQ(gfx0->id.value, 12U);
     ASSERT_NE(gfx0->pmc_info, nullptr);
     EXPECT_EQ(gfx0->pmc_info->pmc_id, 1796U);
 
@@ -1875,7 +1876,7 @@ TEST_F(reader_test, v3_get_scalar_track_on_cpu_thread_returns_empty)
 TEST_F(reader_test, v3_track_scoped_queries_unknown_id_return_empty)
 {
     // Unknown track id is not an error; both accessors return empty.
-    constexpr size_t kUnknownTrackId = 999999999;
+    const profiler_hub::reader_types::track_id_t kUnknownTrackId{ 999999999 };
     ASSERT_TRUE(m_reader->get_interval_track(kUnknownTrackId).empty());
     ASSERT_TRUE(m_reader->get_scalar_track(kUnknownTrackId).empty());
 }
@@ -1951,7 +1952,7 @@ TEST_F(reader_test, v3_get_track_stats_counter_matches_scalar_slice)
 TEST_F(reader_test, v3_get_track_stats_unknown_id_returns_empty)
 {
     // Unknown track id is not an error: zero count, nullopt bounds.
-    constexpr size_t kUnknownTrackId = 999999999;
+    const profiler_hub::reader_types::track_id_t kUnknownTrackId{ 999999999 };
     auto             stats           = m_reader->get_track_stats(kUnknownTrackId);
     ASSERT_EQ(stats.count, 0U);
     ASSERT_FALSE(stats.min_ts.has_value());
@@ -2107,7 +2108,7 @@ TEST_F(reader_v3_edge_test, counter_discovery_excludes_non_pmc_sample_track)
     // non-empty scalar track. The spurious non-PMC track 7 would resolve to zero samples.
     for(const auto& c : counters)
         ASSERT_FALSE(m_reader->get_scalar_track(c->id).empty())
-            << "counter track " << c->id << " has no PMC-backed samples";
+            << "counter track " << c->id.value << " has no PMC-backed samples";
 }
 
 TEST_F(reader_v3_edge_test, counter_identity_null_pid_and_null_tid_branches)
@@ -2943,7 +2944,7 @@ TEST_F(reader_v3_clique_test, get_flows_in_window_filters_by_track_membership)
     auto cpu = find_first_track(m_reader->get_tracks(),
                                 profiler_hub::reader_types::track_type_t::cpu_thread);
     ASSERT_NE(cpu, nullptr);
-    EXPECT_EQ(m_reader->get_flows_in_window({ cpu->id }, {}, 0).size(), 4U);
+    EXPECT_EQ(m_reader->get_flows_in_window({ cpu->id.value }, {}, 0).size(), 4U);
 
     // Empty track list applies no filter.
     EXPECT_EQ(m_reader->get_flows_in_window({}, {}, 0).size(), 7U);
@@ -5007,7 +5008,7 @@ TEST_F(reader_v4_amb_cls_test, v4_non_ambiguous_track_not_flagged)
     for(const auto& t : reader->get_tracks())
     {
         EXPECT_FALSE(t->ambiguous_classification)
-            << "unexpected ambiguous_classification on track id=" << t->id;
+            << "unexpected ambiguous_classification on track id=" << t->id.value;
     }
 }
 
