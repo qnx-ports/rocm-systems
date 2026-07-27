@@ -63,6 +63,11 @@ Full documentation for ROCm Systems Profiler is available at [https://rocm.docs.
 - Introduced the new `profiler-hub` writer backend for trace persistence, as a
   replacement for the existing SQLite3/rocpd backend.
 
+- Pausing sampling now stops the underlying per-thread timers instead of only
+  discarding the samples they produce. Previously a paused sampler kept delivering
+  timer signals, so the profiled application's sleeps were still interrupted
+  throughout a window in which no data was being collected.
+
 ### Removed
 
 - Removed the `-p` / `--pid` option from `rocprof-sys-instrument` for attaching to
