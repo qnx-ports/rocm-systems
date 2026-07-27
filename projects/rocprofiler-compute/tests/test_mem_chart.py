@@ -280,6 +280,27 @@ class TestGfx9GpuArch:
         assert ("PCIe" in clean) == expect_xgmi
 
 
+class TestFabricHbmContent:
+    def test_hbm_request_counts_in_fabric_panel(self):
+        result = mem_chart_gfx9.plot_mem_chart(
+            "per_kernel", dict(mem_chart_gfx9.DEFAULT_SAMPLE_METRICS)
+        )
+        clean = strip_ansi(result)
+        assert "To/From HBM" in clean
+
+    def test_gfx950_shows_hbm_bw_in_hbm_panel(self):
+        metrics = dict(mem_chart_gfx9.DEFAULT_SAMPLE_METRICS)
+        metrics["HBM Read BW"] = 800e9
+        metrics["HBM Write BW"] = 200e9
+        metrics["HBM Atomic BW"] = 10e9
+        result = mem_chart_gfx9.plot_mem_chart("per_kernel", metrics, gpu_arch="gfx950")
+        clean = strip_ansi(result)
+        assert "Read BW" in clean
+        assert "Write BW" in clean
+        assert "Atomic BW" in clean
+        assert "To/From HBM" not in clean
+
+
 class TestComputePeakBw:
     def test_valid_specs(self):
         specs = {
