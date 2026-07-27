@@ -132,7 +132,7 @@
         "0000_top_stats.yaml": "2819d96f5b1c3704f2ac50868a246a7f",
         "0100_system_info.yaml": "cefae2b10db8cf4b0d3a971cff5e82c8",
         "0200_system_speed_of_light.yaml": "683e3116257df32dac95bd33867b6f29",
-        "0300_memory_chart.yaml": "0926694b8e4940b205f55d365106329b",
+        "0300_memory_chart.yaml": "98d68ae29bc9cbd094c18e449dc02c73",
         "0400_roofline.yaml": "166d9478dc8b6c6ae83a66a08647b592",
         "0500_command_processor_cpc_cpf.yaml": "9692ade2811b3693357296edbdf31dce",
         "0600_workgroup_manager_spi.yaml": "95d7f66c50777976248eaefe778366cf",

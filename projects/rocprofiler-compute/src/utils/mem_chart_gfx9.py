@@ -101,6 +101,13 @@ _MEM_CHART_DEFAULT_ROWS: tuple[tuple[str, Union[int, float, None]], ...] = (
     ("Fabric Atomic Lat", 310),
     ("HBM Rd", 42),
     ("HBM Wr", 7),
+    ("HBM Read Traffic", None),
+    ("HBM Write and Atomic Traffic", None),
+    ("Remote Read Traffic", None),
+    ("Remote Write and Atomic Traffic", None),
+    ("HBM Read BW", None),
+    ("HBM Write BW", None),
+    ("HBM Atomic BW", None),
     ("xGMI Read BW", None),
     ("xGMI Write BW", None),
     ("xGMI Atomic BW", None),
@@ -206,6 +213,17 @@ def _extract_metrics(metric_dict: dict[str, Any]) -> dict[str, Any]:
     # L2→Fabric BW (Bytes/s)
     metrics["l2_fabric_read_bw"] = get("L2-Fabric Read BW")
     metrics["l2_fabric_wr_at_bw"] = get("L2-Fabric Write and Atomic BW")
+
+    # Fabric→HBM
+    metrics["hbm_rd"] = get("HBM Rd")
+    metrics["hbm_wr"] = get("HBM Wr")
+    metrics["hbm_read_traffic"] = get("HBM Read Traffic")
+    metrics["hbm_wr_at_traffic"] = get("HBM Write and Atomic Traffic")
+    metrics["remote_read_traffic"] = get("Remote Read Traffic")
+    metrics["remote_wr_at_traffic"] = get("Remote Write and Atomic Traffic")
+    metrics["hbm_read_bw"] = get("HBM Read BW")
+    metrics["hbm_write_bw"] = get("HBM Write BW")
+    metrics["hbm_atomic_bw"] = get("HBM Atomic BW")
 
     # xGMI / PCIe BW (gfx950 only)
     metrics["xgmi_read_bw"] = get("xGMI Read BW")
@@ -496,6 +514,60 @@ def _ip_block(
     )
 
 
+def _build_fabric_content(metrics: dict[str, Any]) -> str:
+    """Build Rich markup for the Data Fabric panel (gfx908–gfx942)."""
+    color_read = COLORS["read"]
+    color_write = COLORS["write"]
+    arrows = make_arrows(8)
+    rd = format_edge("Read", metrics["hbm_rd"])
+    wr = format_edge("Write", metrics["hbm_wr"])
+    hbm_rd_pct = format_value(metrics["hbm_read_traffic"], "%")
+    hbm_wr_pct = format_value(metrics["hbm_wr_at_traffic"], "%")
+    remote_rd_pct = format_value(metrics["remote_read_traffic"], "%")
+    remote_wr_pct = format_value(metrics["remote_wr_at_traffic"], "%")
+    lines = [
+        "[white]To/From HBM[/white]",
+        colored(rd, color_read),
+        colored(arrows["left"], color_read),
+        colored(wr, color_write),
+        colored(arrows["right"], color_write),
+        "",
+        f"[white]HBM   Rd {hbm_rd_pct}[/white]",
+        f"[white]      Wr {hbm_wr_pct}[/white]",
+        f"[white]Remote Rd {remote_rd_pct}[/white]",
+        f"[white]       Wr {remote_wr_pct}[/white]",
+    ]
+    return "\n".join(lines)
+
+
+def _build_hbm_content(
+    metrics: dict[str, Any],
+    peak_bw: Optional[PeakBandwidths] = None,
+) -> str:
+    """Build Rich markup for the HBM panel (gfx950 BW metrics)."""
+    color_read = COLORS["read"]
+    color_write = COLORS["write"]
+    color_atomic = COLORS["atomic"]
+    hbm_peak = peak_bw.hbm if peak_bw else None
+    cr = bw_color(metrics.get("hbm_read_bw"), hbm_peak, color_read)
+    cw = bw_color(metrics.get("hbm_write_bw"), hbm_peak, color_write)
+    ca = bw_color(metrics.get("hbm_atomic_bw"), hbm_peak, color_atomic)
+    rd_bw = format_value(metrics["hbm_read_bw"], "Bytes/s", 1)
+    wr_bw = format_value(metrics["hbm_write_bw"], "Bytes/s", 1)
+    at_bw = format_value(metrics["hbm_atomic_bw"], "Bytes/s", 1)
+    lines = [
+        f"[{cr}]Read BW[/{cr}]",
+        f"[{cr}]{rd_bw}[/{cr}]",
+        "",
+        f"[{cw}]Write BW[/{cw}]",
+        f"[{cw}]{wr_bw}[/{cw}]",
+        "",
+        f"[{ca}]Atomic BW[/{ca}]",
+        f"[{ca}]{at_bw}[/{ca}]",
+    ]
+    return "\n".join(lines)
+
+
 def _build_xgmi_row(console: Console, metrics: dict[str, Any]) -> None:
     """Render the xGMI block above the main diagram with BW metrics."""
     color_read = COLORS["read"]
@@ -619,10 +691,16 @@ def create_mem_chart_diagram(
     l1_l2_edges = _build_l1_l2_edges(metrics, std_arrows, peak_bw)
     l2 = _build_l2_panel(metrics)
     l2_fab_edges = _build_l2_fabric_edges(metrics, std_arrows, peak_bw)
-    fabric = _ip_block("Data Fabric", 22, COLORS["block"])
+    if is_gfx950:
+        fabric = _ip_block("Data Fabric", 22, COLORS["block"])
+        hbm_content = _build_hbm_content(metrics, peak_bw)
+        hbm = _ip_block("HBM", 18, COLORS["block"], hbm_content)
+    else:
+        fabric_content = _build_fabric_content(metrics)
+        fabric = _ip_block("Data Fabric", 22, COLORS["block"], fabric_content)
+        hbm = _ip_block("HBM", 10, COLORS["block"])
     mall = _ip_block("MALL", 18, COLORS["block"])
     umc = _ip_block("UMC", 8, COLORS["block"])
-    hbm = _ip_block("HBM", 10, COLORS["block"])
 
     main_layout = Table.grid(padding=0)
     for _ in range(10):

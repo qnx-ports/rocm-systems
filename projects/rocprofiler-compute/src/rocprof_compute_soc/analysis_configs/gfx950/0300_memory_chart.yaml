@@ -147,6 +147,15 @@ Panel Config:
           value: ROUND(SUM(TCC_EA0_RDREQ_DRAM_sum) / SUM($denom), 0)
         HBM Wr:
           value: ROUND(SUM(TCC_EA0_WRREQ_DRAM_sum) / SUM($denom), 0)
+        HBM Read BW:
+          value: 32 * SUM(TCC_EA0_RDREQ_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          unit: Bytes/s
+        HBM Write BW:
+          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          unit: Bytes/s
+        HBM Atomic BW:
+          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          unit: Bytes/s
         xGMI Read BW:
           value: 32 * SUM(TCC_EA0_RDREQ_GMI_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
           unit: Bytes/s
@@ -301,6 +310,12 @@ Panel Config:
       The total number of L2 requests to Infinity Fabric to write or atomically
       update 32B or 64B of data in the accelerator's local HBM, per normalization
       unit.
+    HBM Read BW: Total number of bytes due to L2 read requests routed to Infinity
+      Fabric targeting the accelerator's local HBM (DRAM), divided by total duration.
+    HBM Write BW: Total number of bytes due to L2 write requests routed to Infinity
+      Fabric targeting the accelerator's local HBM (DRAM), divided by total duration.
+    HBM Atomic BW: Total number of bytes due to L2 atomic requests routed to Infinity
+      Fabric targeting the accelerator's local HBM (DRAM), divided by total duration.
     xGMI Read BW: Total number of bytes due to L2 read requests routed to Infinity
       Fabric (xGMI peer GPU traffic), divided by total duration.
     xGMI Write BW: Total number of bytes due to L2 write requests routed to Infinity
