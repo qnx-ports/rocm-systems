@@ -287,6 +287,7 @@ def _build_request_edges(
     flat_at = format_edge("Atomic", metrics["flat_atomic"])
     buf_rd = format_edge("Read", metrics["buffer_read"])
     buf_wr = format_edge("Write", metrics["buffer_write"])
+    buf_at = format_edge("Atomic", metrics["buffer_atomic"])
     vl1d_lines = [
         "[white]Non-buffer Request[/white]",
         colored(flat_rd, color_read),
@@ -300,6 +301,8 @@ def _build_request_edges(
         colored(arrow_left, color_read),
         colored(buf_wr, color_write),
         colored(arrow_right, color_write),
+        colored(buf_at, color_atomic),
+        colored(arrow_both, color_atomic),
     ]
 
     # LDS scope
