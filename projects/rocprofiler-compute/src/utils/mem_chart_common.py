@@ -360,9 +360,9 @@ def mem_chart_cli_main(
         metrics = dict(default_metrics)
 
     heading = format_mem_chart_heading(args.norm)
-    extra: dict[str, Any] = {}
+    arch_kwargs: dict[str, Any] = {}
     if args.arch:
-        extra["gpu_arch"] = args.arch
+        arch_kwargs["gpu_arch"] = args.arch
 
     if args.txt:
         buf = StringIO()
@@ -377,7 +377,7 @@ def mem_chart_cli_main(
             console,
             show_debug=args.debug,
             chart_title=heading,
-            **extra,
+            **arch_kwargs,
         )
         with pathlib.Path(args.txt).open("w", encoding="utf-8") as fp:
             fp.write(strip_ansi(buf.getvalue()))
@@ -394,7 +394,7 @@ def mem_chart_cli_main(
             console,
             show_debug=args.debug,
             chart_title=heading,
-            **extra,
+            **arch_kwargs,
         )
         console.save_svg(args.svg, title="Memory Chart")
         return
@@ -405,5 +405,5 @@ def mem_chart_cli_main(
         console,
         show_debug=args.debug,
         chart_title=heading,
-        **extra,
+        **arch_kwargs,
     )

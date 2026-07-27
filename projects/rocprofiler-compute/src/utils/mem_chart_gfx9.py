@@ -510,17 +510,17 @@ def _build_fabric_content(metrics: dict[str, Any]) -> str:
     color_read = COLORS["read"]
     color_write = COLORS["write"]
     arrows = make_arrows(8)
-    rd = format_edge("Read", metrics["hbm_rd"])
-    wr = format_edge("Write", metrics["hbm_wr"])
+    read_edge = format_edge("Read", metrics["hbm_rd"])
+    write_edge = format_edge("Write", metrics["hbm_wr"])
     hbm_rd_pct = format_value(metrics["hbm_read_traffic"], "%")
     hbm_wr_pct = format_value(metrics["hbm_wr_at_traffic"], "%")
     remote_rd_pct = format_value(metrics["remote_read_traffic"], "%")
     remote_wr_pct = format_value(metrics["remote_wr_at_traffic"], "%")
     lines = [
         "[white]To/From HBM[/white]",
-        colored(rd, color_read),
+        colored(read_edge, color_read),
         colored(arrows["left"], color_read),
-        colored(wr, color_write),
+        colored(write_edge, color_write),
         colored(arrows["right"], color_write),
         "",
         f"[white]HBM   Rd {hbm_rd_pct}[/white]",
@@ -540,21 +540,21 @@ def _build_hbm_content(
     color_write = COLORS["write"]
     color_atomic = COLORS["atomic"]
     hbm_peak = peak_bw.hbm if peak_bw else None
-    cr = bw_color(metrics.get("hbm_read_bw"), hbm_peak, color_read)
-    cw = bw_color(metrics.get("hbm_write_bw"), hbm_peak, color_write)
-    ca = bw_color(metrics.get("hbm_atomic_bw"), hbm_peak, color_atomic)
+    color_rd = bw_color(metrics.get("hbm_read_bw"), hbm_peak, color_read)
+    color_wr = bw_color(metrics.get("hbm_write_bw"), hbm_peak, color_write)
+    color_at = bw_color(metrics.get("hbm_atomic_bw"), hbm_peak, color_atomic)
     rd_bw = format_value(metrics["hbm_read_bw"], "Bytes/s", 1)
     wr_bw = format_value(metrics["hbm_write_bw"], "Bytes/s", 1)
     at_bw = format_value(metrics["hbm_atomic_bw"], "Bytes/s", 1)
     lines = [
-        f"[{cr}]Read BW[/{cr}]",
-        f"[{cr}]{rd_bw}[/{cr}]",
+        f"[{color_rd}]Read BW[/{color_rd}]",
+        f"[{color_rd}]{rd_bw}[/{color_rd}]",
         "",
-        f"[{cw}]Write BW[/{cw}]",
-        f"[{cw}]{wr_bw}[/{cw}]",
+        f"[{color_wr}]Write BW[/{color_wr}]",
+        f"[{color_wr}]{wr_bw}[/{color_wr}]",
         "",
-        f"[{ca}]Atomic BW[/{ca}]",
-        f"[{ca}]{at_bw}[/{ca}]",
+        f"[{color_at}]Atomic BW[/{color_at}]",
+        f"[{color_at}]{at_bw}[/{color_at}]",
     ]
     return "\n".join(lines)
 
