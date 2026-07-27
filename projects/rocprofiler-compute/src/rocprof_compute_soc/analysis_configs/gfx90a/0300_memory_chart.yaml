@@ -139,6 +139,18 @@ Panel Config:
           value: ROUND(SUM(TCC_EA_RDREQ_DRAM_sum) / SUM($denom), 0)
         HBM Wr:
           value: ROUND(SUM(TCC_EA_WRREQ_DRAM_sum) / SUM($denom), 0)
+        HBM Read Traffic:
+          value: ROUND(100 * SUM(TCC_EA_RDREQ_DRAM_sum) / SUM(TCC_EA_RDREQ_sum), 0)
+          unit: Percent
+        HBM Write and Atomic Traffic:
+          value: ROUND(100 * SUM(TCC_EA_WRREQ_DRAM_sum) / SUM(TCC_EA_WRREQ_sum), 0)
+          unit: Percent
+        Remote Read Traffic:
+          value: ROUND(100 * SUM(TCC_EA_RDREQ_sum - TCC_EA_RDREQ_DRAM_sum) / SUM(TCC_EA_RDREQ_sum), 0)
+          unit: Percent
+        Remote Write and Atomic Traffic:
+          value: ROUND(100 * SUM(TCC_EA_WRREQ_sum - TCC_EA_WRREQ_DRAM_sum) / SUM(TCC_EA_WRREQ_sum), 0)
+          unit: Percent
       comparable: false
       cli_style: mem_chart
       tui_style: mem_chart
@@ -272,3 +284,11 @@ Panel Config:
       The total number of L2 requests to Infinity Fabric to write or atomically
       update 32B or 64B of data in the accelerator's local HBM, per normalization
       unit.
+    HBM Read Traffic: The percent of Fabric read requests routed to the accelerator's
+      local HBM.
+    HBM Write and Atomic Traffic: The percent of Fabric write and atomic requests
+      routed to the accelerator's local HBM.
+    Remote Read Traffic: The percent of Fabric read requests routed to a remote
+      destination (e.g., CPU DRAM or remote GPU HBM).
+    Remote Write and Atomic Traffic: The percent of Fabric write and atomic requests
+      routed to a remote destination (e.g., CPU DRAM or remote GPU HBM).
