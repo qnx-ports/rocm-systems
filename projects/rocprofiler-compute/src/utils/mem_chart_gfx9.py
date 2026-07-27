@@ -3,9 +3,6 @@
 
 """CDNA memory chart renderer (MI200/MI300/MI350)."""
 
-import argparse
-import json
-import pathlib
 from io import StringIO
 from typing import Any, Optional, Union
 
@@ -17,6 +14,9 @@ from rich.text import Text
 from utils.mem_chart_common import (
     COLORS,
     PeakBandwidths,
+    build_bw_edge_column,
+    build_cache_panel,
+    build_kernel_panel,
     build_legend,
     bw_color,
     colored,
@@ -24,8 +24,8 @@ from utils.mem_chart_common import (
     format_mem_chart_heading,
     format_value,
     make_arrows,
-    metric_line,
-    progress_bar,
+    mem_chart_cli_main,
+    render_chart_to_string,
     scale_or_none,
     strip_ansi,
 )
@@ -260,13 +260,7 @@ def _pad_to(lines: list[str], target: int) -> list[str]:
 
 def _build_kernel_panel() -> Panel:
     """Build the Kernel (shader core) panel at full diagram height."""
-    return Panel(
-        "\n" * 13 + "[dim]Shader Core[/dim]\n[dim]Wave Execution[/dim]",
-        title=f"[bold {COLORS['kernel']}]Kernel[/bold {COLORS['kernel']}]",
-        border_style=COLORS["kernel"],
-        width=14,
-        height=_TOTAL_H,
-    )
+    return build_kernel_panel(_TOTAL_H, padding_lines=13)
 
 
 def _build_request_edges(
@@ -356,15 +350,12 @@ def _build_l1_stack(metrics: dict[str, Any]) -> Table:
     """Build vertically stacked L1 cache panels: VL1D, LDS, sL1D, L1I."""
     color_block = COLORS["block"]
 
-    vl1_panel = Panel(
-        f"{metric_line('Hit', metrics['vl1_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['vl1_hit'])}[/dim]",
-        title=f"[bold {color_block}]VL1D[/bold {color_block}]",
-        border_style=color_block,
+    vl1_panel = build_cache_panel(
+        "VL1D",
+        [("Hit", metrics["vl1_hit"], "%", COLORS["hit"])],
         width=20,
         height=_VL1D_H,
     )
-
     lds_panel = Panel(
         "",
         title=f"[bold {color_block}]LDS[/bold {color_block}]",
@@ -372,21 +363,15 @@ def _build_l1_stack(metrics: dict[str, Any]) -> Table:
         width=20,
         height=_LDS_H,
     )
-
-    sl1d_panel = Panel(
-        f"{metric_line('Hit', metrics['sl1d_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['sl1d_hit'])}[/dim]",
-        title=f"[bold {color_block}]sL1D[/bold {color_block}]",
-        border_style=color_block,
+    sl1d_panel = build_cache_panel(
+        "sL1D",
+        [("Hit", metrics["sl1d_hit"], "%", COLORS["hit"])],
         width=20,
         height=_SL1D_H,
     )
-
-    l1i_panel = Panel(
-        f"{metric_line('Hit', metrics['il1_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['il1_hit'])}[/dim]",
-        title=f"[bold {color_block}]L1I[/bold {color_block}]",
-        border_style=color_block,
+    l1i_panel = build_cache_panel(
+        "L1I",
+        [("Hit", metrics["il1_hit"], "%", COLORS["hit"])],
         width=20,
         height=_L1I_H,
     )
@@ -460,12 +445,9 @@ def _build_l1_l2_edges(
 
 
 def _build_l2_panel(metrics: dict[str, Any]) -> Panel:
-    color_block = COLORS["block"]
-    return Panel(
-        f"{metric_line('Hit', metrics['l2_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['l2_hit'])}[/dim]",
-        title=f"[bold {color_block}]L2[/bold {color_block}]",
-        border_style=color_block,
+    return build_cache_panel(
+        "L2",
+        [("Hit", metrics["l2_hit"], "%", COLORS["hit"])],
         width=18,
         height=_TOTAL_H,
     )
@@ -478,27 +460,33 @@ def _build_l2_fabric_edges(
 ) -> Text:
     """L2→Fabric edges: Read BW and Write/Atomic BW."""
     l2_peak = peak_bw.l2 if peak_bw else None
-    color_read = bw_color(metrics.get("l2_fabric_read_bw"), l2_peak, COLORS["read"])
-    color_write = bw_color(metrics.get("l2_fabric_wr_at_bw"), l2_peak, COLORS["write"])
-    arrow_left = arrows["left"]
-    arrow_right = arrows["right"]
-
-    rd_bw = format_value(metrics["l2_fabric_read_bw"], "Bytes/s", 1)
-    wr_at_bw = format_value(metrics["l2_fabric_wr_at_bw"], "Bytes/s", 1)
-
-    content = [
-        f"[{color_read}]Read BW[/{color_read}]",
-        f"[{color_read}]{rd_bw}[/{color_read}]",
-        f"[{color_read}]{arrow_left}[/{color_read}]",
-        "",
-        f"[{color_write}]Write/Atomic BW[/{color_write}]",
-        f"[{color_write}]{wr_at_bw}[/{color_write}]",
-        f"[{color_write}]{arrow_right}[/{color_write}]",
-    ]
-    offset = (_TOTAL_H - len(content)) // 2
-    lines = [""] * offset + content
-    lines = _pad_to(lines, _TOTAL_H)
-    return Text.from_markup("\n".join(lines))
+    return build_bw_edge_column(
+        [
+            (
+                "Read BW",
+                format_value(metrics["l2_fabric_read_bw"], "Bytes/s", 1),
+                "left",
+                bw_color(
+                    metrics.get("l2_fabric_read_bw"),
+                    l2_peak,
+                    COLORS["read"],
+                ),
+            ),
+            (
+                "Write/Atomic BW",
+                format_value(metrics["l2_fabric_wr_at_bw"], "Bytes/s", 1),
+                "right",
+                bw_color(
+                    metrics.get("l2_fabric_wr_at_bw"),
+                    l2_peak,
+                    COLORS["write"],
+                ),
+            ),
+        ],
+        arrows,
+        height=_TOTAL_H,
+        center=True,
+    )
 
 
 def _ip_block(
@@ -779,23 +767,23 @@ def plot_mem_chart(
     peak_bw: Optional[PeakBandwidths] = None,
 ) -> str:
     """Render the CDNA memory chart and return as a string."""
-    flat = normalize_mem_chart_metrics(metric_dict)
     resolved_heading = (
         format_mem_chart_heading(normal_unit, panel_id=300)
         if chart_title is None
         else chart_title
     )
-    buf = StringIO()
-    console = Console(file=buf, force_terminal=True, width=240, height=80)
-    create_mem_chart_diagram(
-        flat,
-        console,
-        show_debug=False,
-        chart_title=resolved_heading,
-        gpu_arch=gpu_arch,
-        peak_bw=peak_bw,
+    kwargs: dict[str, Any] = {"chart_title": resolved_heading}
+    if gpu_arch is not None:
+        kwargs["gpu_arch"] = gpu_arch
+    if peak_bw is not None:
+        kwargs["peak_bw"] = peak_bw
+    return render_chart_to_string(
+        create_mem_chart_diagram,
+        metric_dict,
+        normalize_mem_chart_metrics,
+        console_width=240,
+        **kwargs,
     )
-    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -803,91 +791,13 @@ def plot_mem_chart(
 # ---------------------------------------------------------------------------
 
 
-def _render_to_plain_text(
-    metrics: dict[str, Any],
-    heading: str,
-    show_debug: bool,
-    gpu_arch: Optional[str] = None,
-    peak_bw: Optional[PeakBandwidths] = None,
-) -> str:
-    """Render chart to plain text (no ANSI codes)."""
-    buf = StringIO()
-    console = Console(file=buf, force_terminal=False, width=240, height=80)
-    create_mem_chart_diagram(
-        metrics,
-        console,
-        show_debug=show_debug,
-        chart_title=heading,
-        gpu_arch=gpu_arch,
-        peak_bw=peak_bw,
-    )
-    return strip_ansi(buf.getvalue())
-
-
 def main() -> None:
-    arg_parser = argparse.ArgumentParser(
-        description="CDNA Memory Chart - CLI",
-    )
-    arg_parser.add_argument(
-        "--data",
-        "-d",
-        help="JSON file with metrics data",
-    )
-    arg_parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Show debug info",
-    )
-    arg_parser.add_argument(
-        "--norm",
-        default="per_kernel",
-        help="Normalization unit",
-    )
-    arg_parser.add_argument(
-        "--arch", default=None, help="GPU architecture (e.g. gfx950)"
-    )
-    arg_parser.add_argument("--txt", help="Write plain text to file")
-    arg_parser.add_argument("--svg", help="Write SVG to file")
-    args = arg_parser.parse_args()
-
-    if args.data:
-        with pathlib.Path(args.data).open(encoding="utf-8") as f:
-            metrics = json.load(f)
-    else:
-        metrics = dict(DEFAULT_SAMPLE_METRICS)
-
-    heading = format_mem_chart_heading(args.norm)
-
-    if args.txt:
-        clean = _render_to_plain_text(
-            metrics,
-            heading,
-            args.debug,
-            gpu_arch=args.arch,
-        )
-        with pathlib.Path(args.txt).open("w", encoding="utf-8") as f:
-            f.write(clean)
-        return
-
-    if args.svg:
-        console = Console(record=True, width=240, height=80)
-        create_mem_chart_diagram(
-            metrics,
-            console,
-            show_debug=args.debug,
-            chart_title=heading,
-            gpu_arch=args.arch,
-        )
-        console.save_svg(args.svg, title="CDNA Memory Chart")
-        return
-
-    console = Console(width=240)
-    create_mem_chart_diagram(
-        metrics,
-        console,
-        show_debug=args.debug,
-        chart_title=heading,
-        gpu_arch=args.arch,
+    mem_chart_cli_main(
+        "CDNA Memory Chart - CLI",
+        create_mem_chart_diagram,
+        normalize_mem_chart_metrics,
+        DEFAULT_SAMPLE_METRICS,
+        console_width=240,
     )
 
 

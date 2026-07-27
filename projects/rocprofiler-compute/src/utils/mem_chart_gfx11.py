@@ -28,10 +28,6 @@ RDNA3.5 MEMORY HIERARCHY (GCEA = Graphics Core Efficiency Arbiter):
          -> LDS (Local Data Share) [stays on CU, no GL1 Cache connection]
 """
 
-import argparse
-import json
-import pathlib
-from io import StringIO
 from typing import Any, Union
 
 from rich.console import Console
@@ -41,16 +37,18 @@ from rich.text import Text
 
 from utils.mem_chart_common import (
     COLORS,
+    build_bw_edge_column,
+    build_cache_panel,
+    build_kernel_panel,
     build_legend,
     colored,
     format_edge,
-    format_mem_chart_heading,
     format_value,
     make_arrows,
+    mem_chart_cli_main,
     metric_line,
-    progress_bar,
+    render_chart_to_string,
     safe_float_sum,
-    strip_ansi,
 )
 
 # ---------------------------------------------------------------------------
@@ -233,38 +231,20 @@ def _extract_metrics(metric_dict: dict[str, Any]) -> dict[str, Any]:
 _DIAGRAM_HEIGHT = 30
 
 
-def _build_bw_edge_column(
+def _build_gfx11_bw_edge_column(
     read_bw_str: str,
     write_bw_str: str,
     arrows: dict[str, str],
-    height: int = _DIAGRAM_HEIGHT,
-    offset: int = 11,
 ) -> Text:
-    """Build a Read/Write BW edge column at *offset* rows from the top."""
-    color_read = COLORS["read"]
-    color_write = COLORS["write"]
-    content = [
-        colored("Read BW", color_read),
-        colored(read_bw_str, color_read),
-        colored(arrows["left"], color_read),
-        "",
-        colored("Write BW", color_write),
-        colored(write_bw_str, color_write),
-        colored(arrows["right"], color_write),
-    ]
-    lines = [""] * offset + content
-    lines += [""] * max(0, height - len(lines))
-    return Text.from_markup("\n".join(lines[:height]))
-
-
-def _build_gfx11_kernel_panel() -> Panel:
-    """Build the Kernel (shader core) panel at full diagram height."""
-    return Panel(
-        "\n" * 11 + "[dim]Shader Core[/dim]\n[dim]Wave Execution[/dim]",
-        title=colored("Kernel", COLORS["kernel"]),
-        border_style=COLORS["kernel"],
-        width=14,
+    """Build a Read/Write BW edge column for the gfx11 layout."""
+    return build_bw_edge_column(
+        [
+            ("Read BW", read_bw_str, "left", COLORS["read"]),
+            ("Write BW", write_bw_str, "right", COLORS["write"]),
+        ],
+        arrows,
         height=_DIAGRAM_HEIGHT,
+        offset=11,
     )
 
 
@@ -415,17 +395,13 @@ def _build_gl1_edges(
 
 def _build_gl1_panel(metrics: dict[str, Any]) -> Panel:
     """Build the GL1 Cache panel."""
-    color_block = COLORS["block"]
-    return Panel(
-        f"{metric_line('Util', metrics['gl1c_util'], '%', COLORS['util'])}\n"
-        f"[dim]{progress_bar(metrics['gl1c_util'])}[/dim]\n"
-        "\n"
-        f"{metric_line('Hit Rate', metrics['gl1c_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['gl1c_hit'])}[/dim]\n"
-        "\n"
-        f"{metric_line('GL2 Stall', metrics['gl1c_stall_gl2'], '%', COLORS['stall'])}",
-        title=f"[bold {color_block}]GL1 Cache[/bold {color_block}]",
-        border_style=color_block,
+    return build_cache_panel(
+        "GL1 Cache",
+        [
+            ("Util", metrics["gl1c_util"], "%", COLORS["util"]),
+            ("Hit Rate", metrics["gl1c_hit"], "%", COLORS["hit"]),
+            ("GL2 Stall", metrics["gl1c_stall_gl2"], "%", COLORS["stall"], False),
+        ],
         width=16,
         height=_DIAGRAM_HEIGHT,
     )
@@ -433,15 +409,12 @@ def _build_gl1_panel(metrics: dict[str, Any]) -> Panel:
 
 def _build_gl2_panel(metrics: dict[str, Any]) -> Panel:
     """Build the GL2 Cache panel."""
-    color_block = COLORS["block"]
-    return Panel(
-        f"{metric_line('Util', metrics['gl2c_util'], '%', COLORS['util'])}\n"
-        f"[dim]{progress_bar(metrics['gl2c_util'])}[/dim]\n"
-        "\n"
-        f"{metric_line('Hit Rate', metrics['gl2c_hit'], '%', COLORS['hit'])}\n"
-        f"[dim]{progress_bar(metrics['gl2c_hit'])}[/dim]",
-        title=f"[bold {color_block}]GL2 Cache[/bold {color_block}]",
-        border_style=color_block,
+    return build_cache_panel(
+        "GL2 Cache",
+        [
+            ("Util", metrics["gl2c_util"], "%", COLORS["util"]),
+            ("Hit Rate", metrics["gl2c_hit"], "%", COLORS["hit"]),
+        ],
         width=16,
         height=_DIAGRAM_HEIGHT,
     )
@@ -449,14 +422,12 @@ def _build_gl2_panel(metrics: dict[str, Any]) -> Panel:
 
 def _build_gcea_panel(metrics: dict[str, Any]) -> Panel:
     """Build the GCEA (Graphics Core Efficiency Arbiter) panel."""
-    color_block = COLORS["block"]
-    return Panel(
-        f"{metric_line('SysArb Util', metrics['sarb_util'], '%', COLORS['util'])}\n"
-        f"[dim]{progress_bar(metrics['sarb_util'])}[/dim]\n"
-        "\n"
-        f"{metric_line('Stall', metrics['sarb_stall'], '%', COLORS['stall'])}",
-        title=f"[bold {color_block}]GCEA[/bold {color_block}]",
-        border_style=color_block,
+    return build_cache_panel(
+        "GCEA",
+        [
+            ("SysArb Util", metrics["sarb_util"], "%", COLORS["util"]),
+            ("Stall", metrics["sarb_stall"], "%", COLORS["stall"], False),
+        ],
         width=16,
         height=_DIAGRAM_HEIGHT,
     )
@@ -500,17 +471,17 @@ def create_mem_chart_diagram(
     std_arrows = make_arrows(9)
     kernel_arrows = make_arrows(16)
 
-    gl1_gl2_edges = _build_bw_edge_column(
+    gl1_gl2_edges = _build_gfx11_bw_edge_column(
         format_value(metrics["gl1_gl2_read_bw"], "Bytes/s", 1),
         format_value(metrics["gl1_gl2_write_bw"], "Bytes/s", 1),
         std_arrows,
     )
-    gl2_gcea_edges = _build_bw_edge_column(
+    gl2_gcea_edges = _build_gfx11_bw_edge_column(
         format_value(metrics["gl2c_read_bw"], "Bytes/s", 1),
         format_value(metrics["gl2c_write_bw"], "Bytes/s", 1),
         std_arrows,
     )
-    dram_edges = _build_bw_edge_column(
+    dram_edges = _build_gfx11_bw_edge_column(
         format_value(metrics["dram_read_bw"], "Bytes/s", 1),
         format_value(metrics["dram_write_bw"], "Bytes/s", 1),
         std_arrows,
@@ -521,7 +492,7 @@ def create_mem_chart_diagram(
         main_layout.add_column()
 
     main_layout.add_row(
-        _build_gfx11_kernel_panel(),
+        build_kernel_panel(_DIAGRAM_HEIGHT, padding_lines=11),
         _build_kernel_edges(metrics, kernel_arrows),
         _build_l0_stack(metrics),
         _build_gl1_edges(metrics, std_arrows),
@@ -563,21 +534,14 @@ def plot_mem_chart(
 
     ``metric_dict`` keys should match ``0300_memory_chart.yaml`` (gfx115x).
     ``chart_title``: full heading line printed above the diagram.
-
-    Note: unlike gfx9's ``plot_mem_chart``, this function has no
-    ``normal_unit`` parameter because all callers supply ``chart_title``
-    directly — there is no need for a fallback heading.
     """
-    flat = normalize_mem_chart_metrics(metric_dict)
-    buf = StringIO()
-    console = Console(file=buf, force_terminal=True, width=200, height=80)
-    create_mem_chart_diagram(
-        flat,
-        console,
-        show_debug=False,
+    return render_chart_to_string(
+        create_mem_chart_diagram,
+        metric_dict,
+        normalize_mem_chart_metrics,
+        console_width=200,
         chart_title=chart_title,
     )
-    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -586,70 +550,13 @@ def plot_mem_chart(
 
 
 def main() -> None:
-    arg_parser = argparse.ArgumentParser(description="Memory Chart - CLI Visualization")
-    arg_parser.add_argument("--data", "-d", help="JSON file with metrics data")
-    arg_parser.add_argument("--debug", action="store_true", help="Show debug info")
-    arg_parser.add_argument("--arch", default="gfx1151", help="Architecture name")
-    arg_parser.add_argument("--norm", default="per_kernel", help="Normalization unit")
-    arg_parser.add_argument("--txt", "-t", help="Output to plain text file")
-    arg_parser.add_argument("--svg", help="Output to SVG file")
-    args = arg_parser.parse_args()
-
-    if args.data:
-        with pathlib.Path(args.data).open(encoding="utf-8") as f:
-            metric_dict = normalize_mem_chart_metrics(json.load(f))
-    else:
-        metric_dict = dict(DEFAULT_SAMPLE_METRICS)
-
-    heading = format_mem_chart_heading(args.norm)
-
-    if args.txt:
-        buf = StringIO()
-        console = Console(
-            file=buf,
-            force_terminal=True,
-            width=200,
-            height=80,
-            no_color=True,
-        )
-        create_mem_chart_diagram(
-            metric_dict,
-            console,
-            args.debug,
-            chart_title=heading,
-        )
-        plain = strip_ansi(buf.getvalue())
-        with pathlib.Path(args.txt).open("w", encoding="utf-8") as f:
-            f.write(plain)
-        print(f"Output written to {args.txt}")
-    elif args.svg:
-        svg_console = Console(
-            file=StringIO(),
-            force_terminal=True,
-            width=200,
-            height=80,
-            record=True,
-        )
-        create_mem_chart_diagram(
-            metric_dict,
-            svg_console,
-            args.debug,
-            chart_title=heading,
-        )
-        svg_output = svg_console.export_svg(title=heading)
-        with pathlib.Path(args.svg).open("w", encoding="utf-8") as f:
-            f.write(svg_output)
-        print(f"SVG saved to {args.svg}")
-    else:
-        buf = StringIO()
-        console = Console(file=buf, force_terminal=True, width=200, height=80)
-        create_mem_chart_diagram(
-            metric_dict,
-            console,
-            args.debug,
-            chart_title=heading,
-        )
-        print(buf.getvalue())
+    mem_chart_cli_main(
+        "RDNA3.5 Memory Chart - CLI",
+        create_mem_chart_diagram,
+        normalize_mem_chart_metrics,
+        DEFAULT_SAMPLE_METRICS,
+        console_width=200,
+    )
 
 
 if __name__ == "__main__":

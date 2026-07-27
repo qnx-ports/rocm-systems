@@ -3,10 +3,19 @@
 
 """Shared helpers for memory chart renderers (gfx9, gfx11)."""
 
+import argparse
+import json
 import math
+import pathlib
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from io import StringIO
 from typing import Any, Optional, Union
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from utils.utils_analysis import format_bw_human_readable
 
@@ -219,3 +228,182 @@ def bw_color(
     if pct < 80:
         return "bright_yellow"
     return "red"
+
+
+# ---------------------------------------------------------------------------
+# Shared Rich panel builders
+# ---------------------------------------------------------------------------
+
+
+def build_kernel_panel(
+    height: int,
+    padding_lines: int = 13,
+) -> Panel:
+    """Build the Kernel (shader core) panel used by both gfx9 and gfx11."""
+    return Panel(
+        "\n" * padding_lines + "[dim]Shader Core[/dim]\n[dim]Wave Execution[/dim]",
+        title=(f"[bold {COLORS['kernel']}]Kernel[/bold {COLORS['kernel']}]"),
+        border_style=COLORS["kernel"],
+        width=14,
+        height=height,
+    )
+
+
+def build_cache_panel(
+    title: str,
+    rows: list[
+        Union[
+            tuple[str, Any, str, str],
+            tuple[str, Any, str, str, bool],
+        ]
+    ],
+    width: int,
+    height: int,
+    border_style: str = COLORS["block"],
+) -> Panel:
+    """Build a cache panel with metric lines and optional progress bars.
+
+    Each entry in *rows* is ``(label, value, unit, color)`` or
+    ``(label, value, unit, color, show_bar)``.  A progress bar is
+    appended after ``%`` metrics unless *show_bar* is ``False``.
+    """
+    lines: list[str] = []
+    for i, row in enumerate(rows):
+        label, value, unit, color = row[:4]
+        show_bar = row[4] if len(row) > 4 else True  # type: ignore[arg-type]
+        if i > 0:
+            lines.append("")
+        lines.append(metric_line(label, value, unit, color))
+        if unit == "%" and show_bar:
+            lines.append(f"[dim]{progress_bar(value)}[/dim]")
+    return Panel(
+        "\n".join(lines),
+        title=f"[bold {border_style}]{title}[/bold {border_style}]",
+        border_style=border_style,
+        width=width,
+        height=height,
+    )
+
+
+def build_bw_edge_column(
+    entries: list[tuple[str, str, str, str]],
+    arrows: dict[str, str],
+    height: int,
+    offset: int = 0,
+    center: bool = False,
+) -> Text:
+    """Build a vertical edge column with labeled BW arrows.
+
+    Each entry in *entries* is ``(label, formatted_value, arrow_key, color)``
+    where *arrow_key* is ``"left"``, ``"right"``, or ``"both"``.
+    """
+    content: list[str] = []
+    for i, (label, value_str, arrow_key, color) in enumerate(entries):
+        if i > 0:
+            content.append("")
+        content.append(colored(label, color))
+        content.append(colored(value_str, color))
+        content.append(colored(arrows[arrow_key], color))
+    if center:
+        offset = max(0, (height - len(content)) // 2)
+    lines = [""] * offset + content
+    lines += [""] * max(0, height - len(lines))
+    return Text.from_markup("\n".join(lines[:height]))
+
+
+# ---------------------------------------------------------------------------
+# Shared rendering scaffold
+# ---------------------------------------------------------------------------
+
+
+def render_chart_to_string(
+    create_fn: Callable[..., None],
+    metric_dict: dict[str, Any],
+    normalize_fn: Callable[[dict[str, Any]], dict[str, Any]],
+    console_width: int = 240,
+    **diagram_kwargs: Any,  # noqa: ANN401
+) -> str:
+    """Normalize metrics, render via *create_fn*, return the output."""
+    flat = normalize_fn(metric_dict)
+    buf = StringIO()
+    console = Console(
+        file=buf,
+        force_terminal=True,
+        width=console_width,
+        height=80,
+    )
+    create_fn(flat, console, show_debug=False, **diagram_kwargs)
+    return buf.getvalue()
+
+
+def mem_chart_cli_main(
+    description: str,
+    create_fn: Callable[..., None],
+    normalize_fn: Callable[[dict[str, Any]], dict[str, Any]],
+    default_metrics: dict[str, Any],
+    console_width: int = 240,
+) -> None:
+    """Shared CLI entry point for memory chart renderers."""
+    arg_parser = argparse.ArgumentParser(description=description)
+    arg_parser.add_argument("--data", "-d", help="JSON file with metrics data")
+    arg_parser.add_argument("--debug", action="store_true", help="Show debug info")
+    arg_parser.add_argument("--norm", default="per_kernel", help="Normalization unit")
+    arg_parser.add_argument("--arch", default=None, help="GPU architecture")
+    arg_parser.add_argument("--txt", help="Write plain text to file")
+    arg_parser.add_argument("--svg", help="Write SVG to file")
+    args = arg_parser.parse_args()
+
+    if args.data:
+        with pathlib.Path(args.data).open(encoding="utf-8") as fp:
+            metrics = json.load(fp)
+    else:
+        metrics = dict(default_metrics)
+
+    heading = format_mem_chart_heading(args.norm)
+    extra: dict[str, Any] = {}
+    if args.arch:
+        extra["gpu_arch"] = args.arch
+
+    if args.txt:
+        buf = StringIO()
+        console = Console(
+            file=buf,
+            force_terminal=False,
+            width=console_width,
+            height=80,
+        )
+        create_fn(
+            metrics,
+            console,
+            show_debug=args.debug,
+            chart_title=heading,
+            **extra,
+        )
+        with pathlib.Path(args.txt).open("w", encoding="utf-8") as fp:
+            fp.write(strip_ansi(buf.getvalue()))
+        return
+
+    if args.svg:
+        console = Console(
+            record=True,
+            width=console_width,
+            height=80,
+        )
+        create_fn(
+            metrics,
+            console,
+            show_debug=args.debug,
+            chart_title=heading,
+            **extra,
+        )
+        console.save_svg(args.svg, title="Memory Chart")
+        return
+
+    console = Console(width=console_width)
+    create_fn(
+        metrics,
+        console,
+        show_debug=args.debug,
+        chart_title=heading,
+        **extra,
+    )
