@@ -27,7 +27,6 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 ### Optimized
 
 * Reduced profile-mode peak memory when writing counter data on large workloads.
-
 ### Resolved issues
 
 ### Upcoming changes
