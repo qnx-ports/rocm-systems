@@ -28,14 +28,15 @@ public:
     : m_session{ sess }
     , m_clock{ clk }
     , m_config{ cfg }
+    , m_scope{ event_scope }
     {
-        sess.register_trigger(trigger_name, initial_action(cfg), event_scope);
+        sess.register_trigger(trigger_name, initial_action(cfg), m_scope);
     }
 
     ~time_window()
     {
         stop();
-        m_session.unregister_trigger(trigger_name);
+        m_session.unregister_trigger(trigger_name, m_scope);
     }
 
     time_window(const time_window&)            = delete;
@@ -69,6 +70,7 @@ private:
     session&     m_session;
     Clock&       m_clock;
     const config m_config;
+    const scope  m_scope;
     std::thread  m_thread;
     std::mutex   m_lifecycle_mutex;
 
@@ -96,14 +98,14 @@ private:
         if(has_delay)
         {
             if(!m_clock.sleep_until(t0 + m_config.delay)) return;  // interrupted
-            m_session.set_action(trigger_name, action::trace);
+            m_session.set_action(trigger_name, action::trace, m_scope);
         }
 
         if(has_duration)
         {
             const auto end = t0 + m_config.delay + m_config.duration;
-            if(!m_clock.sleep_until(end)) return;               // interrupted
-            m_session.set_action(trigger_name, action::pause);  // terminal
+            if(!m_clock.sleep_until(end)) return;                        // interrupted
+            m_session.set_action(trigger_name, action::pause, m_scope);  // terminal
         }
     }
 };

@@ -62,9 +62,9 @@ public:
     void register_trigger(std::string_view name, action initial,
                           scope event_scope = scope::global);
 
-    void unregister_trigger(std::string_view name);
+    void unregister_trigger(std::string_view name, scope event_scope = scope::global);
 
-    void set_action(std::string_view name, action act);
+    void set_action(std::string_view name, action act, scope event_scope = scope::global);
 
     /// If the session is currently paused, fire pause on all subscribers
     /// to reflect the initial state. Subscribers default to "running", so
@@ -87,13 +87,9 @@ public:
 private:
     static constexpr std::size_t scope_count = static_cast<std::size_t>(scope::count_);
 
-    struct entry
-    {
-        action act{ action::trace };
-        scope  event_scope{ scope::global };
-    };
+    using scoped_actions = std::unordered_map<std::string, action>;
 
-    std::unordered_map<std::string, entry>     m_actions;
+    std::array<scoped_actions, scope_count>    m_actions;
     std::vector<subscriber>                    m_subscribers;
     std::array<std::atomic<bool>, scope_count> m_active{};
 
