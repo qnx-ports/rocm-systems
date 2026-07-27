@@ -1022,6 +1022,31 @@ TEST_F(reader_test, get_event_info_sample_is_point_event)
     EXPECT_FALSE(detail->te.has_value());  // point event
 }
 
+TEST_F(reader_test, get_event_info_counter_sample_carries_name_and_value)
+{
+    // §7 (task 052): a counter sample resolved through the unified get_event_info carries
+    // the counter name (from its track) and the counter value (from scalar_detail).
+    // Oracle is derived at runtime from the same track + sample so it stays robust to
+    // fixture edits; this is exactly the payload the pre-052 bare-timestamp arm dropped
+    // (guard-bite).
+    auto tracks = m_reader->get_all_tracks();
+    auto counter =
+        find_first_track(tracks, profiler_hub::reader_types::track_type_t::counter);
+    ASSERT_NE(counter, nullptr);
+    auto samples = m_reader->get_scalar_track(counter->id);
+    ASSERT_FALSE(samples.empty());
+
+    const auto& s      = samples.front();  // a real counter sample on `counter`
+    auto        detail = m_reader->get_event_info(s.id);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->name, counter->name);  // counter name resolved from the track
+
+    auto* value = find_prop(*detail, "value");
+    ASSERT_NE(value, nullptr);
+    ASSERT_TRUE(std::holds_alternative<double>(*value));
+    EXPECT_DOUBLE_EQ(std::get<double>(*value), s.value);
+}
+
 TEST_F(reader_test, get_event_info_returns_nullopt_for_invalid_handle)
 {
     // A handle to a non-existent row resolves to nothing, not a throw.
@@ -3572,12 +3597,29 @@ TEST_F(reader_v4_counter_test, v4_get_event_info_resolves_sample_point_event)
 {
     // sample row id 1 -> timestamp 3000. The scalar handle encodes the sample event
     // type; get_event_info resolves it as a point event (te == nullopt). The counter
-    // value itself is carried on scalar_event_t::value, not the unified detail bag.
+    // name + value payload is asserted separately below (§7, task 052).
     auto details = m_reader->get_event_info(
         make_event_id(profiler_hub::reader_types::event_type_t::sample, 1));
     ASSERT_TRUE(details.has_value());
     ASSERT_EQ(details->ts, 3000U);
     ASSERT_FALSE(details->te.has_value());
+}
+
+TEST_F(reader_v4_counter_test, v4_get_event_info_counter_sample_carries_name_and_value)
+{
+    // §7 (task 052, v4 backend): sample row id 1 -> track 1 "GRBM_COUNT", value 30.5.
+    // Resolved through the unified get_event_info the counter sample carries the counter
+    // name (from the track) + value (as a double property). Pre-052 this arm returned a
+    // bare timestamp, dropping name+value (guard-bite).
+    auto details = m_reader->get_event_info(
+        make_event_id(profiler_hub::reader_types::event_type_t::sample, 1));
+    ASSERT_TRUE(details.has_value());
+    ASSERT_EQ(details->name, "GRBM_COUNT");
+
+    auto* value = find_prop(*details, "value");
+    ASSERT_NE(value, nullptr);
+    ASSERT_TRUE(std::holds_alternative<double>(*value));
+    ASSERT_DOUBLE_EQ(std::get<double>(*value), 30.5);
 }
 
 TEST_F(reader_v4_counter_test, v4_get_event_info_pmc_event_carries_value)
