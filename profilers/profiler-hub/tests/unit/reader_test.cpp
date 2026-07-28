@@ -2944,7 +2944,7 @@ TEST_F(reader_v3_clique_test, get_flows_in_window_filters_by_track_membership)
     auto cpu = find_first_track(m_reader->get_tracks(),
                                 profiler_hub::reader_types::track_type_t::cpu_thread);
     ASSERT_NE(cpu, nullptr);
-    EXPECT_EQ(m_reader->get_flows_in_window({ cpu->id.value }, {}, 0).size(), 4U);
+    EXPECT_EQ(m_reader->get_flows_in_window({ cpu->id }, {}, 0).size(), 4U);
 
     // Empty track list applies no filter.
     EXPECT_EQ(m_reader->get_flows_in_window({}, {}, 0).size(), 7U);
