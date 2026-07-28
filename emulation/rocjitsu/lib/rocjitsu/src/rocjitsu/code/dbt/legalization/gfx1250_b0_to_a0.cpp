@@ -35,12 +35,13 @@ namespace {
 ///     rule.
 /// Separately, a 64-bit source reading FLAT_SCRATCH_BASE is classified via
 /// operand inspection (see gfx1250_reads_flat_scratch_base_64bit). The
-/// unbounded sleep and the affected barrier-state ids are decided entirely by
-/// their semantic rules, which are attempted before raw encoding translation
-/// and return not-handled for the forms that need nothing, leaving those on the
-/// copy path. This classification is looked up first, but its action applies
-/// only once a rule declines, so a predicate here would turn every declined
-/// instruction into a refusal. Ordinary sleeps are copied.
+/// unbounded sleep, the affected barrier-state ids, and the lookup-table
+/// permutes are decided entirely by their semantic rules, which are attempted
+/// before raw encoding translation and return not-handled for the forms that
+/// need nothing, leaving those on the copy path. This classification is looked
+/// up first, but its action applies only once a rule declines, so a predicate
+/// here would turn every declined instruction into a refusal. Ordinary sleeps
+/// are copied.
 /// Classifying the fail-closed cases keeps the failure explicit and located; add
 /// the semantic rule (and update this note) once each expansion is implemented.
 inline constexpr std::array<std::string_view, 17> kExactB0ToA0TranslationMnemonics = {
