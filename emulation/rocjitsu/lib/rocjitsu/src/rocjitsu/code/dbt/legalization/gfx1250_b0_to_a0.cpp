@@ -36,9 +36,15 @@ namespace {
 ///   * integer IU4 and IU8 WMMA/SWMMAC forms without an implemented spacing
 ///     rule.
 /// Separately, a 64-bit source reading FLAT_SCRATCH_BASE is classified via
-/// operand inspection (see gfx1250_reads_flat_scratch_base_64bit), and the
-/// barrier-state and sleep/monitor families are DEFERRED with a pass-through
-/// warning rather than fail-closed (see is_deferred_gfx1250_family).
+/// operand inspection (see gfx1250_reads_flat_scratch_base_64bit). The
+/// unbounded sleep is decided entirely by its semantic rule, which is attempted
+/// before raw encoding translation and returns not-handled for the forms that
+/// need nothing, leaving them on the copy path. This classification is looked up
+/// first, but its action applies only once the rule declines, so a predicate
+/// here would turn every declined sleep into a refusal. The barrier-state query
+/// is DEFERRED with a
+/// pass-through warning rather than fail-closed (see
+/// is_deferred_gfx1250_family).
 /// Classifying the fail-closed cases keeps the failure explicit and located; add
 /// the semantic rule (and update this note) once each expansion is implemented.
 inline constexpr std::array<std::string_view, 17> kExactB0ToA0TranslationMnemonics = {
@@ -152,16 +158,13 @@ inline constexpr std::array<std::string_view, 17> kExactB0ToA0TranslationMnemoni
 
 /// @brief True for instruction families whose A0 handling is deferred pending
 /// confirmation of the exact translated set.
-/// @details The barrier-state query and the sleep/monitor families may need
-/// target-specific translation that is not yet implemented. Rather than fail closed
-/// (which would refuse otherwise-translatable kernels that use very common ops
-/// such as s_sleep), these are passed through unchanged for now and a warning is
-/// emitted so the omission is visible. Revisit once the precise set is
-/// confirmed; if translation is required, move the relevant members to
-/// requires_b0_to_a0_expansion() so they fail closed instead.
+/// @details The barrier-state query may need target-specific translation that is
+/// not yet implemented. Rather than fail closed, it is passed through unchanged
+/// for now and a warning is emitted so the omission is visible. Revisit once the
+/// precise set is confirmed; if translation is required, move it to
+/// requires_b0_to_a0_expansion() so it fails closed instead.
 [[nodiscard]] bool is_deferred_gfx1250_family(std::string_view mnemonic) {
-  return mnemonic == "s_get_barrier_state" || mnemonic == "s_sleep" || mnemonic == "s_sleep_var" ||
-         mnemonic == "s_monitor_sleep";
+  return mnemonic == "s_get_barrier_state";
 }
 
 } // namespace
