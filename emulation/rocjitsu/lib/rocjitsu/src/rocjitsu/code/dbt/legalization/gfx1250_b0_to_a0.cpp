@@ -12,8 +12,6 @@
 #include "rocjitsu/isa/arch/amdgpu/gfx1250/machine_insts.h"
 #include "rocjitsu/isa/instruction.h"
 
-#include "util/log.h"
-
 #include <array>
 #include <cstring>
 #include <string_view>
@@ -37,14 +35,12 @@ namespace {
 ///     rule.
 /// Separately, a 64-bit source reading FLAT_SCRATCH_BASE is classified via
 /// operand inspection (see gfx1250_reads_flat_scratch_base_64bit). The
-/// unbounded sleep is decided entirely by its semantic rule, which is attempted
-/// before raw encoding translation and returns not-handled for the forms that
-/// need nothing, leaving them on the copy path. This classification is looked up
-/// first, but its action applies only once the rule declines, so a predicate
-/// here would turn every declined sleep into a refusal. The barrier-state query
-/// is DEFERRED with a
-/// pass-through warning rather than fail-closed (see
-/// is_deferred_gfx1250_family).
+/// unbounded sleep and the affected barrier-state ids are decided entirely by
+/// their semantic rules, which are attempted before raw encoding translation
+/// and return not-handled for the forms that need nothing, leaving those on the
+/// copy path. This classification is looked up first, but its action applies
+/// only once a rule declines, so a predicate here would turn every declined
+/// instruction into a refusal. Ordinary sleeps are copied.
 /// Classifying the fail-closed cases keeps the failure explicit and located; add
 /// the semantic rule (and update this note) once each expansion is implemented.
 inline constexpr std::array<std::string_view, 17> kExactB0ToA0TranslationMnemonics = {
@@ -156,17 +152,6 @@ inline constexpr std::array<std::string_view, 17> kExactB0ToA0TranslationMnemoni
   return encoding.clamp != 0;
 }
 
-/// @brief True for instruction families whose A0 handling is deferred pending
-/// confirmation of the exact translated set.
-/// @details The barrier-state query may need target-specific translation that is
-/// not yet implemented. Rather than fail closed, it is passed through unchanged
-/// for now and a warning is emitted so the omission is visible. Revisit once the
-/// precise set is confirmed; if translation is required, move it to
-/// requires_b0_to_a0_expansion() so it fails closed instead.
-[[nodiscard]] bool is_deferred_gfx1250_family(std::string_view mnemonic) {
-  return mnemonic == "s_get_barrier_state";
-}
-
 } // namespace
 
 const InstructionLegalization *gfx1250_b0_to_a0_legalization(const Instruction &inst) {
@@ -182,11 +167,6 @@ const InstructionLegalization *gfx1250_b0_to_a0_legalization(const Instruction &
   // the operand rather than the mnemonic, so it is classified separately.
   if (!requires_b0_to_a0_expansion(inst.mnemonic()) &&
       !gfx1250_reads_flat_scratch_base_64bit(inst)) {
-    // Deferred families pass through unchanged but warn, so the not-yet-handled
-    // case is visible rather than silent. See is_deferred_gfx1250_family.
-    if (is_deferred_gfx1250_family(mnemonic))
-      util::Logger::warn("gfx1250 translation passes through '", mnemonic,
-                         "' unchanged; target-specific handling is not yet implemented");
     return nullptr;
   }
 
