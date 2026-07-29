@@ -357,6 +357,8 @@ device:
   Unit_hipGetProcAddress_IPC_Memory: *level_2
   Unit_hipGetProcAddress_IPC_Event:
     <<: *level_2
+  Unit_hipGetProcAddress_IPC_Event_ParentRecord:
+    <<: *level_2
   Unit_hipIpcOpenMemHandle_Negative_Open_In_Creating_Process:
     <<: *level_2
     # Note: Windows disabled

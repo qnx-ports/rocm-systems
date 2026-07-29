@@ -207,6 +207,7 @@ class IPCEventEmulated : public Event {
     }
   };
   ihipIpcEvent_t ipc_evt_;
+  bool imported_ = false;  //!< True if opened from an imported handle (debug tracing only)
 
  public:
   explicit IPCEventEmulated(uint32_t flags = hipEventInterprocess) : Event(flags) {}
@@ -257,6 +258,7 @@ struct CallbackData {
 /// the GPU waits until the signal reaches 0 before proceeding.
 class IPCEvent : public Event {
   amd::device::Signal* ipc_signal_;
+  bool imported_ = false;  //!< True if opened from an imported handle (debug tracing only)
 
  public:
   explicit IPCEvent(uint32_t flags = hipEventInterprocess)

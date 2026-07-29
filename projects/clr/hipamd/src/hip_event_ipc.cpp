@@ -7,6 +7,8 @@
 #include <hip/hip_runtime.h>
 
 #include "hip_event.hpp"
+#include <cstdio>
+#include <cstdlib>
 #if !defined(_MSC_VER)
 #include <unistd.h>
 #else
@@ -19,6 +21,28 @@ namespace hip {
 hipError_t ihipEventCreateWithFlags(hipEvent_t* event, unsigned flags);
 hipError_t ihipCreateIpcEventByType(hipEvent_t* event, ihipIpcEventHandleType type);
 void ihipDestroyIpcEvent(hipEvent_t event);
+
+// ================================================================================================
+// Opt-in IPC-event tracing. Gated by the HIP_IPC_EVENT_DEBUG environment
+// variable (set to a non-empty, non-"0" value). Tests that need it set the
+// variable themselves before fork()/HIP init so both processes inherit it. This
+// is intentionally cheap and dependency-free (fprintf to stderr) so it can be
+// enabled on CI to diagnose the interprocess record/wait fault.
+namespace {
+inline bool ipcEventDebugEnabled() {
+  const char* v = getenv("HIP_IPC_EVENT_DEBUG");
+  return v != nullptr && v[0] != '\0' && v[0] != '0';
+}
+}  // namespace
+
+#define IPC_EVT_DBG(fmt, ...)                                                       \
+  do {                                                                             \
+    if (hip::ipcEventDebugEnabled()) {                                             \
+      fprintf(stderr, "[hip-ipc-event pid=%d] " fmt "\n",                          \
+              static_cast<int>(amd::Os::getProcessId()), ##__VA_ARGS__);           \
+      fflush(stderr);                                                              \
+    }                                                                             \
+  } while (0)
 
 // ================================================================================================
 bool IPCEventEmulated::createIpcEventShmemIfNeeded() {
@@ -56,6 +80,9 @@ bool IPCEventEmulated::createIpcEventShmemIfNeeded() {
   // Register signal array with device
   constexpr size_t kSignalArraySize = sizeof(uint32_t) * IPC_SIGNALS_PER_EVENT;
   const auto status = ihipHostRegister(&shmem->signal, kSignalArraySize, 0);
+  IPC_EVT_DBG("Emulated createShmem name=%s shmem=%p signal=%p hostRegister=%d",
+              ipc_evt_.ipc_name_.c_str(), static_cast<void*>(shmem),
+              static_cast<void*>(&shmem->signal), static_cast<int>(status));
   return status == hipSuccess;
 }
 
@@ -77,6 +104,8 @@ hipError_t IPCEventEmulated::query() {
 // ================================================================================================
 hipError_t IPCEventEmulated::synchronize() {
   std::scoped_lock lock(lock_);
+  IPC_EVT_DBG("Emulated synchronize imported=%d shmem=%p", static_cast<int>(imported_),
+              static_cast<void*>(ipc_evt_.ipc_shmem_));
   if (ipc_evt_.ipc_shmem_) {
     int prev_read_idx = ipc_evt_.ipc_shmem_->read_index;
     if (prev_read_idx >= 0) {
@@ -94,6 +123,9 @@ hipError_t IPCEventEmulated::synchronize() {
 hipError_t IPCEventEmulated::streamWait(hip::Stream* stream, uint flags) {
   std::scoped_lock lock(lock_);
   const int offset = ipc_evt_.ipc_shmem_->read_index;
+  IPC_EVT_DBG("Emulated streamWait imported=%d read_index=%d signal=%p",
+              static_cast<int>(imported_), offset,
+              static_cast<void*>(&ipc_evt_.ipc_shmem_->signal[offset]));
   return ihipStreamOperation(
       reinterpret_cast<hipStream_t>(stream),
       ROCCLR_COMMAND_STREAM_WAIT_VALUE,
@@ -107,6 +139,7 @@ hipError_t IPCEventEmulated::recordCommand(amd::Command*& command, amd::HostQueu
   // Graph event-record nodes call this directly; lock_ is recursive so the
   // normal addMarker path is unaffected.
   std::scoped_lock lock(lock_);
+  IPC_EVT_DBG("Emulated recordCommand imported=%d", static_cast<int>(imported_));
   command = new amd::Marker(*stream, kMarkerDisableFlush);
   return hipSuccess;
 }
@@ -123,6 +156,11 @@ hipError_t IPCEventEmulated::enqueueRecordCommand(hip::Stream* stream, amd::Comm
   const int write_index = shmem->write_index++;
   const int offset = write_index % IPC_SIGNALS_PER_EVENT;
   auto& signal = shmem->signal[offset];
+
+  IPC_EVT_DBG("Emulated enqueueRecord imported=%d write_index=%d offset=%d signal=%p "
+              "owner_pid=%d owner_dev=%d this_dev=%d",
+              static_cast<int>(imported_), write_index, offset, static_cast<void*>(&signal),
+              shmem->owners_process_id.load(), shmem->owners_device_id.load(), deviceId());
 
   // Wait for signal slot to become available
   while (signal != 0) {
@@ -144,6 +182,8 @@ hipError_t IPCEventEmulated::enqueueRecordCommand(hip::Stream* stream, amd::Comm
   const auto status = ihipStreamOperation(reinterpret_cast<hipStream_t>(stream),
                                           ROCCLR_COMMAND_STREAM_WRITE_VALUE, &signal, 0, 0, 0,
                                           sizeof(uint32_t));
+  IPC_EVT_DBG("Emulated enqueueRecord streamWriteValue signal=%p status=%d",
+              static_cast<void*>(&signal), static_cast<int>(status));
   if (status != hipSuccess) {
     return status;
   }
@@ -169,6 +209,8 @@ hipError_t IPCEventEmulated::GetHandle(ihipIpcEventHandle_t* handle) {
   handle->creator_pid = static_cast<int32_t>(amd::Os::getProcessId());
   memset(handle->shmem_name, 0, IHIP_IPC_EVENT_HANDLE_SIZE);
   ipc_evt_.ipc_name_.copy(handle->shmem_name, std::string::npos);
+  IPC_EVT_DBG("Emulated GetHandle name=%s creator_pid=%d dev=%d", ipc_evt_.ipc_name_.c_str(),
+              handle->creator_pid, deviceId());
   return hipSuccess;
 }
 
@@ -176,12 +218,16 @@ hipError_t IPCEventEmulated::GetHandle(ihipIpcEventHandle_t* handle) {
 hipError_t IPCEventEmulated::OpenHandle(ihipIpcEventHandle_t* handle) {
   std::scoped_lock lock(lock_);
   ipc_evt_.ipc_name_ = handle->shmem_name;
+  imported_ = true;
+  IPC_EVT_DBG("Emulated OpenHandle name=%s creator_pid=%d", ipc_evt_.ipc_name_.c_str(),
+              handle->creator_pid);
 
   // Map shared memory from IPC handle
   auto** shmem_ptr = reinterpret_cast<void**>(&ipc_evt_.ipc_shmem_);
   if (!amd::Os::MemoryMapFileTruncated(ipc_evt_.ipc_name_.c_str(),
                                        const_cast<const void**>(shmem_ptr),
                                        sizeof(ihipIpcEventShmem_t))) {
+    IPC_EVT_DBG("Emulated OpenHandle MemoryMapFile FAILED name=%s", ipc_evt_.ipc_name_.c_str());
     return hipErrorInvalidValue;
   }
 
@@ -190,6 +236,8 @@ hipError_t IPCEventEmulated::OpenHandle(ihipIpcEventHandle_t* handle) {
   // Prevent opening in the same process
   const auto current_process_id = amd::Os::getProcessId();
   if (current_process_id == shmem->owners_process_id.load()) {
+    IPC_EVT_DBG("Emulated OpenHandle rejected: same process pid=%d",
+                static_cast<int>(current_process_id));
     return hipErrorInvalidContext;
   }
 
@@ -197,7 +245,13 @@ hipError_t IPCEventEmulated::OpenHandle(ihipIpcEventHandle_t* handle) {
 
   // Register signal array with device
   constexpr size_t kSignalArraySize = sizeof(uint32_t) * IPC_SIGNALS_PER_EVENT;
-  return ihipHostRegister(&shmem->signal, kSignalArraySize, 0);
+  const auto status = ihipHostRegister(&shmem->signal, kSignalArraySize, 0);
+  IPC_EVT_DBG("Emulated OpenHandle mapped shmem=%p signal=%p owner_pid=%d owner_dev=%d "
+              "hostRegister=%d",
+              static_cast<void*>(shmem), static_cast<void*>(&shmem->signal),
+              shmem->owners_process_id.load(), shmem->owners_device_id.load(),
+              static_cast<int>(status));
+  return status;
 }
 
 // ================================================================================================
@@ -216,6 +270,8 @@ hipError_t IPCEvent::createIpcSignalIfNeeded() {
   if (ipc_signal_ == nullptr) {
     return hipErrorInvalidValue;
   }
+  IPC_EVT_DBG("ROCr createIpcSignal imported=%d signal=%p dev=%d", static_cast<int>(imported_),
+              static_cast<void*>(ipc_signal_), deviceId());
 
   const auto ws = (flags_ & hipEventBlockingSync)
       ? amd::device::Signal::WaitState::Blocked
@@ -253,8 +309,11 @@ hipError_t IPCEvent::GetHandle(ihipIpcEventHandle_t* handle) {
   handle->type = kIpcEventHandleROCr;
   handle->creator_pid = static_cast<int32_t>(amd::Os::getProcessId());
   if (!ipc_signal_->IpcExport(handle->ipc_signal_handle, IHIP_IPC_EVENT_HANDLE_SIZE)) {
+    IPC_EVT_DBG("ROCr GetHandle IpcExport FAILED signal=%p", static_cast<void*>(ipc_signal_));
     return hipErrorInvalidValue;
   }
+  IPC_EVT_DBG("ROCr GetHandle creator_pid=%d signal=%p dev=%d", handle->creator_pid,
+              static_cast<void*>(ipc_signal_), deviceId());
 
   return hipSuccess;
 }
@@ -262,11 +321,15 @@ hipError_t IPCEvent::GetHandle(ihipIpcEventHandle_t* handle) {
 // ================================================================================================
 hipError_t IPCEvent::OpenHandle(ihipIpcEventHandle_t* handle) {
   std::scoped_lock lock(lock_);
+  imported_ = true;
+  IPC_EVT_DBG("ROCr OpenHandle type=%d creator_pid=%d", static_cast<int>(handle->type),
+              handle->creator_pid);
   if (handle->type != kIpcEventHandleROCr) {
     return hipErrorInvalidValue;
   }
 
   if (static_cast<int32_t>(amd::Os::getProcessId()) == handle->creator_pid) {
+    IPC_EVT_DBG("ROCr OpenHandle rejected: same process pid=%d", handle->creator_pid);
     return hipErrorInvalidContext;
   }
 
@@ -277,10 +340,13 @@ hipError_t IPCEvent::OpenHandle(ihipIpcEventHandle_t* handle) {
   }
 
   if (!ipc_signal_->IpcImport(handle->ipc_signal_handle, IHIP_IPC_EVENT_HANDLE_SIZE)) {
+    IPC_EVT_DBG("ROCr OpenHandle IpcImport FAILED signal=%p", static_cast<void*>(ipc_signal_));
     delete ipc_signal_;
     ipc_signal_ = nullptr;
     return hipErrorInvalidValue;
   }
+  IPC_EVT_DBG("ROCr OpenHandle imported signal=%p dev=%d", static_cast<void*>(ipc_signal_),
+              deviceId());
 
   return hipSuccess;
 }
@@ -298,6 +364,8 @@ hipError_t IPCEvent::recordCommand(amd::Command*& command, amd::HostQueue* strea
     return status;
   }
 
+  IPC_EVT_DBG("ROCr recordCommand imported=%d signal=%p (setIpcCompletionSignal)",
+              static_cast<int>(imported_), static_cast<void*>(ipc_signal_));
   auto* marker = new amd::Marker(*stream, kMarkerDisableFlush);
   marker->setIpcCompletionSignal(ipc_signal_);
   command = marker;
@@ -319,14 +387,21 @@ hipError_t IPCEvent::enqueueRecordCommand(hip::Stream* stream, amd::Command* com
   // barrier's pending decrement and a waiter can wake on the wrong recording.
   // Skip the wait on the first record (signal still at its initial value, never
   // decremented) — waiting there would hang forever.
+  IPC_EVT_DBG("ROCr enqueueRecord ENTER imported=%d signal=%p first_record=%d",
+              static_cast<int>(imported_), static_cast<void*>(ipc_signal_),
+              static_cast<int>(event_ == nullptr));
   if (event_ != nullptr) {
     ipc_signal_->Wait(1, amd::device::Signal::Condition::Lt, UINT64_MAX);
   }
 
   // Re-arm the signal; GPU barrier will decrement to 0 when work completes
+  IPC_EVT_DBG("ROCr enqueueRecord Reset(1) imported=%d signal=%p", static_cast<int>(imported_),
+              static_cast<void*>(ipc_signal_));
   ipc_signal_->Reset(1);
 
   command->enqueue();
+  IPC_EVT_DBG("ROCr enqueueRecord enqueued imported=%d signal=%p", static_cast<int>(imported_),
+              static_cast<void*>(ipc_signal_));
 
   if (event_ != nullptr) {
     event_->release();
@@ -344,6 +419,8 @@ hipError_t IPCEvent::synchronize() {
     return hipSuccess;
   }
 
+  IPC_EVT_DBG("ROCr synchronize imported=%d signal=%p", static_cast<int>(imported_),
+              static_cast<void*>(ipc_signal_));
   ipc_signal_->Wait(1, amd::device::Signal::Condition::Lt, UINT64_MAX);
   return hipSuccess;
 }
@@ -374,6 +451,8 @@ hipError_t IPCEvent::streamWait(hip::Stream* stream, uint flags) {
     return hipSuccess;
   }
 
+  IPC_EVT_DBG("ROCr streamWait imported=%d signal=%p (setIpcDepSignal)",
+              static_cast<int>(imported_), static_cast<void*>(ipc_signal_));
   // Dispatch a barrier that waits on the IPC signal as dep_signal
   auto* marker = new amd::Marker(*stream, kMarkerDisableFlush);
   marker->setIpcDepSignal(ipc_signal_);
@@ -392,6 +471,7 @@ hipError_t hipIpcGetEventHandle(hipIpcEventHandle_t* handle, hipEvent_t event) {
     HIP_RETURN(hipErrorInvalidValue);
   }
 
+  IPC_EVT_DBG("hipIpcGetEventHandle ENTER event=%p", static_cast<void*>(event));
   auto e = reinterpret_cast<hip::Event*>(event);
   HIP_RETURN(e->GetHandle(reinterpret_cast<ihipIpcEventHandle_t*>(handle)));
 }
@@ -405,6 +485,8 @@ hipError_t hipIpcOpenEventHandle(hipEvent_t* event, hipIpcEventHandle_t handle) 
   }
 
   auto* const iHandle = reinterpret_cast<ihipIpcEventHandle_t*>(&handle);
+  IPC_EVT_DBG("hipIpcOpenEventHandle ENTER type=%d creator_pid=%d",
+              static_cast<int>(iHandle->type), iHandle->creator_pid);
 
   // Select event implementation based on the handle's type field rather than
   // a runtime probe — the opener must match the exporter's implementation.
