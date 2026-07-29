@@ -73,9 +73,9 @@ public:
 
     [[nodiscard]] bool is_active(scope event_scope = scope::global) const noexcept
     {
-        assert(static_cast<std::size_t>(event_scope) < scope_count);
+        assert(static_cast<std::size_t>(event_scope) < SCOPE_COUNT);
         return m_active[static_cast<std::size_t>(event_scope)].load(
-            std::memory_order_relaxed);
+            std::memory_order_acquire);
     }
 
     /// True iff every trigger of @p event_scope except @p name currently has
@@ -85,13 +85,13 @@ public:
         std::string_view name, scope event_scope = scope::global) const noexcept;
 
 private:
-    static constexpr std::size_t scope_count = static_cast<std::size_t>(scope::count_);
+    static constexpr std::size_t SCOPE_COUNT = static_cast<std::size_t>(scope::count_);
 
     using scoped_actions = std::unordered_map<std::string, action>;
 
-    std::array<scoped_actions, scope_count>    m_actions;
+    std::array<scoped_actions, SCOPE_COUNT>    m_actions;
     std::vector<subscriber>                    m_subscribers;
-    std::array<std::atomic<bool>, scope_count> m_active{};
+    std::array<std::atomic<bool>, SCOPE_COUNT> m_active{};
 
     mutable std::mutex m_actions_mutex;
     std::mutex         m_subscribers_mutex;

@@ -39,7 +39,7 @@ listens_to(const subscriber& sub, scope event_scope)
 session::session() noexcept
 {
     for(auto& a : m_active)
-        a.store(true, std::memory_order_relaxed);
+        a.store(true, std::memory_order_release);
 }
 
 void
@@ -55,7 +55,7 @@ session::shutdown()
         for(auto& scoped : m_actions)
             scoped.clear();
         for(auto& a : m_active)
-            a.store(true, std::memory_order_relaxed);
+            a.store(true, std::memory_order_release);
     }
 }
 
@@ -98,10 +98,10 @@ session::set_action(std::string_view name, action act, scope event_scope)
     {
         std::scoped_lock const lk{ m_actions_mutex };
 
-        was_active = m_active[scope_idx].load(std::memory_order_relaxed);
+        was_active = m_active[scope_idx].load(std::memory_order_acquire);
         m_actions[scope_idx][std::string{ name }] = act;
         now_active                                = resolve_locked(event_scope);
-        m_active[scope_idx].store(now_active, std::memory_order_relaxed);
+        m_active[scope_idx].store(now_active, std::memory_order_release);
     }
 
     if(was_active == now_active) return;
@@ -140,8 +140,8 @@ void
 session::update_active_locked(scope event_scope)
 {
     const auto idx = static_cast<std::size_t>(event_scope);
-    assert(idx < scope_count);
-    m_active[idx].store(resolve_locked(event_scope), std::memory_order_relaxed);
+    assert(idx < SCOPE_COUNT);
+    m_active[idx].store(resolve_locked(event_scope), std::memory_order_release);
 }
 
 // Any pause action within the given scope pauses that scope. Skip is
