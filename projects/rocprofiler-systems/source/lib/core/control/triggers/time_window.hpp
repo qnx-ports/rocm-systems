@@ -14,7 +14,7 @@
 
 namespace rocprofsys::control::triggers
 {
-template <typename Clock>
+template <clock_policy Clock>
 class time_window
 {
 public:
@@ -53,6 +53,7 @@ public:
         std::scoped_lock const lk{ m_lifecycle_mutex };
         if(!has_window()) return;
         if(m_thread.joinable()) return;
+        m_clock.reset();
         m_thread = std::thread{ [this]() { worker(); } };
     }
 

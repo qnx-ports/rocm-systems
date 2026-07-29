@@ -87,13 +87,13 @@ public:
         return !m_interrupted;
     }
 
-    void interrupt()
+    void interrupt() noexcept
     {
         std::scoped_lock const lk{ m_mutex };
         m_interrupted = true;
     }
 
-    void reset()
+    void reset() noexcept
     {
         std::scoped_lock const lk{ m_mutex };
         m_interrupted = false;
