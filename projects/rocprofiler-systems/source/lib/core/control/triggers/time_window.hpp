@@ -24,12 +24,12 @@ public:
         clock_duration duration{};
     };
 
-    time_window(session& sess, Clock& clk, config cfg)
+    time_window(session& sess, Clock& clk, config cfg, scope event_scope = scope::global)
     : m_session{ sess }
     , m_clock{ clk }
     , m_config{ cfg }
     {
-        sess.register_trigger(trigger_name, initial_action(cfg));
+        sess.register_trigger(trigger_name, initial_action(cfg), event_scope);
     }
 
     ~time_window()
@@ -55,11 +55,6 @@ public:
         m_thread = std::thread{ [this]() { worker(); } };
     }
 
-    /// Interrupt the clock and join the worker thread. Idempotent.
-    /// m_thread.join() can only throw if joinable() is false (guarded above)
-    /// or if called from the worker thread itself, which never happens -
-    /// stop() is only ever invoked from the owning thread (including via
-    /// the destructor), never from worker().
     void stop() noexcept
     {
         std::scoped_lock const lk{ m_lifecycle_mutex };

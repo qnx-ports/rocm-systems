@@ -19,6 +19,8 @@ namespace rocprofsys::control::triggers
 class roctx
 {
 public:
+    static constexpr std::string_view trigger_name = "roctx";
+
     roctx(session& sess, std::string_view trace_regions);
     ~roctx();
 
@@ -49,8 +51,6 @@ private:
     std::atomic<bool>                  m_should_write{ true };
     std::mutex                         m_mutex;
     session&                           m_session;
-
-    static constexpr std::string_view trigger_name = "roctx";
 
     [[nodiscard]] action compute_action() const noexcept;
     [[nodiscard]] bool   compute_should_write() const noexcept;
