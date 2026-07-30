@@ -3673,8 +3673,8 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
         } else if (rcclParamCePipeline() && comm->ceColl.pipeline != nullptr
                    && info->coll == ncclFuncAllGather) {   // only AG is pipelined so far
           // result > scratch -> pipeline through a multi-buffered scratch.
-          // all depth buffers must fit: depth * nRanks * sub <= ddaScratchBytes
-          size_t maxSub = comm->ddaScratchBytes / ((size_t)comm->ceColl.pipeline->depth * (size_t)comm->nRanks);
+          // all buffers must fit: nbuf * nRanks * sub <= ddaScratchBytes
+          size_t maxSub = comm->ddaScratchBytes / ((size_t)NCCL_CE_NUM_SLOTS * (size_t)comm->nRanks);
           size_t sub = rcclParamCePipelineChunkBytes();
           if (sub == 0 || sub > maxSub) sub = maxSub;   // auto-size / clamp to bound
           sub = (sub / typeBytes) * typeBytes;          // element-align
@@ -3691,7 +3691,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo* info) {
                recvBytes, comm->ddaScratchBytes, (int)(rcclParamCePipeline() && comm->ceColl.pipeline != nullptr));
         }
       }
-      else if (!ddaHandled && (comm->config.CTAPolicy & NCCL_CTA_POLICY_ZERO) && ceAvailable && !hasSysmemSegment) {
+      if (!ddaHandled && (comm->config.CTAPolicy & NCCL_CTA_POLICY_ZERO) && ceAvailable && !hasSysmemSegment) {
         INFO(NCCL_TUNING, "Using CE collective, count=%zu, recvBytes=%zu", info->count, recvBytes);
         NCCLCHECK(ceCollTaskAppend(comm, info, sendWin, recvWin, /*ddaRecvBase=*/nullptr, /*ddaPeerBases=*/nullptr, /*ddaPipeline=*/false, /*ddaSubChunkBytes=*/0, opDev));
       }
