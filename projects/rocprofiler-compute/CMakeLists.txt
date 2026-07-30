@@ -864,17 +864,17 @@ endif()
 # only exists when torch and the Python development files were found.
 if(TARGET test-roctx-recordfn)
     if(TEST_FROM_INSTALL)
+        set(_rcfn_launcher tests/roctx_recordfn_launcher.py)
         set(_rcfn_test_cmd tests/test-roctx-recordfn)
     else()
+        set(_rcfn_launcher ${PROJECT_SOURCE_DIR}/tests/roctx_recordfn_launcher.py)
         set(_rcfn_test_cmd $<TARGET_FILE:test-roctx-recordfn>)
     endif()
-    add_test(NAME test-roctx-recordfn COMMAND ${_rcfn_test_cmd})
-    set_tests_properties(
-        test-roctx-recordfn
-        PROPERTIES
-            ENVIRONMENT
-                "LD_LIBRARY_PATH=${ROCTX_RECORDFN_TEST_LD_PATH}:$ENV{LD_LIBRARY_PATH}"
+    add_test(
+        NAME test-roctx-recordfn
+        COMMAND ${PYTHON_TEST_COMMAND} ${_rcfn_launcher} ${_rcfn_test_cmd}
     )
+    set_tests_properties(test-roctx-recordfn PROPERTIES SKIP_RETURN_CODE 125)
 endif()
 
 # -----------------------------------
