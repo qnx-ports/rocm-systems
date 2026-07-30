@@ -859,6 +859,24 @@ if(TARGET test-pc-sampling-collector)
     endif()
 endif()
 
+# Registered here rather than in src/lib/roctx_recordfn/tests so the YAML
+# category labels, applied in this directory scope, can reach it. The target
+# only exists when torch and the Python development files were found.
+if(TARGET test-roctx-recordfn)
+    if(TEST_FROM_INSTALL)
+        set(_rcfn_test_cmd tests/test-roctx-recordfn)
+    else()
+        set(_rcfn_test_cmd $<TARGET_FILE:test-roctx-recordfn>)
+    endif()
+    add_test(NAME test-roctx-recordfn COMMAND ${_rcfn_test_cmd})
+    set_tests_properties(
+        test-roctx-recordfn
+        PROPERTIES
+            ENVIRONMENT
+                "LD_LIBRARY_PATH=${ROCTX_RECORDFN_TEST_LD_PATH}:$ENV{LD_LIBRARY_PATH}"
+    )
+endif()
+
 # -----------------------------------
 # Generate coverage tests
 # -----------------------------------
