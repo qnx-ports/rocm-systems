@@ -12,47 +12,6 @@ target_link_libraries(${target} PRIVATE roctx-recordfn gtest_main)
 # torch's shared libraries cross-reference one another at load time.
 target_link_options(${target} PRIVATE LINKER:--allow-shlib-undefined)
 
-get_filename_component(_roctx_lib_dir "${ROCTX_LIB}" DIRECTORY)
-set_target_properties(
-    ${target}
-    PROPERTIES INSTALL_RPATH "${_torch_lib_search_dirs};${_roctx_lib_dir}"
-)
-
-# On some ROCm layouts openblas is outside the torch wheel; add it to the
-# runtime library path when present.
-set(_rcfn_openblas_dir "")
-foreach(
-    _dir
-    IN
-    ITEMS
-        "$ENV{ROCM_PATH}/lib/host-math/lib"
-        "/opt/rocm/lib/host-math/lib"
-        "$ENV{ROCM_PATH}/lib"
-        "/opt/rocm/lib"
-        "$ENV{ROCM_PATH}/lib64"
-        "/opt/rocm/lib64"
-)
-    file(GLOB _rcfn_openblas_hits "${_dir}/librocm-openblas.so*")
-    if(_rcfn_openblas_hits)
-        set(_rcfn_openblas_dir "${_dir}")
-        break()
-    endif()
-endforeach()
-
-set(_rcfn_test_ld_paths "${_torch_lib_search_dirs}")
-if(_rcfn_openblas_dir)
-    list(APPEND _rcfn_test_ld_paths "${_rcfn_openblas_dir}")
-endif()
-list(JOIN _rcfn_test_ld_paths ":" _rcfn_test_ld_path)
-
-# add_test() is issued from the top-level CMakeLists so the YAML category
-# labels, applied in that directory scope, can reach the test.
-set(ROCTX_RECORDFN_TEST_LD_PATH
-    "${_rcfn_test_ld_path}"
-    CACHE INTERNAL
-    "LD_LIBRARY_PATH entries required to run ${target}."
-)
-
 if(INSTALL_TESTS)
     install(
         TARGETS ${target}
