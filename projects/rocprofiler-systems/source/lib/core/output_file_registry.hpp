@@ -36,6 +36,9 @@ struct output_file
 class output_file_registry
 {
 public:
+    static output_file make_entry(std::string path, output_format format,
+                                  const std::string& component_name = {});
+
     void register_file(std::string path, output_format format);
     void register_file(std::string path, output_format format,
                        std::string component_name);
@@ -44,9 +47,6 @@ public:
     void clear();
 
 private:
-    static output_file make_entry(std::string path, output_format format,
-                                  const std::string& component_name = {});
-
     mutable std::mutex       m_mutex;
     std::vector<output_file> m_files;
 };

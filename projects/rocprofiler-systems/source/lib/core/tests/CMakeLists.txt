@@ -36,6 +36,18 @@ target_include_directories(
     PRIVATE ${PROJECT_SOURCE_DIR}/source/lib ${CMAKE_BINARY_DIR}/source/lib/
 )
 
+add_library(output-file-registry-tests OBJECT test_output_file_registry.cpp)
+
+target_link_libraries(
+    output-file-registry-tests
+    PRIVATE rocprofiler-systems-googletest-library rocprofiler-systems-core-library
+)
+
+target_include_directories(
+    output-file-registry-tests
+    PRIVATE ${PROJECT_SOURCE_DIR}/source/lib
+)
+
 add_library(parse-numeric-range-tests OBJECT test_parse_numeric_range.cpp)
 
 target_link_libraries(
