@@ -45,17 +45,12 @@ if(_rcfn_openblas_dir)
 endif()
 list(JOIN _rcfn_test_ld_paths ":" _rcfn_test_ld_path)
 
-if(TEST_FROM_INSTALL)
-    set(_rcfn_test_cmd tests/${target})
-else()
-    set(_rcfn_test_cmd $<TARGET_FILE:${target}>)
-endif()
-add_test(NAME ${target} COMMAND ${_rcfn_test_cmd})
-set_tests_properties(
-    ${target}
-    PROPERTIES
-        LABELS "quick;standard;comprehensive;full;pre-commit;smoke;pr;nightly;weekly"
-        ENVIRONMENT "LD_LIBRARY_PATH=${_rcfn_test_ld_path}:$ENV{LD_LIBRARY_PATH}"
+# add_test() is issued from the top-level CMakeLists so the YAML category
+# labels, applied in that directory scope, can reach the test.
+set(ROCTX_RECORDFN_TEST_LD_PATH
+    "${_rcfn_test_ld_path}"
+    CACHE INTERNAL
+    "LD_LIBRARY_PATH entries required to run ${target}."
 )
 
 if(INSTALL_TESTS)
