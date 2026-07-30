@@ -1075,6 +1075,7 @@ install(
     FILES_MATCHING
     PATTERN "*.hip"
     PATTERN "*.h"
+    PATTERN "conjugate_gradient/cg_args.hpp"
     PATTERN "*.cpp"
     PATTERN "*.py"
     PATTERN "workloads" EXCLUDE
@@ -1131,6 +1132,8 @@ if(INSTALL_TESTS)
         COMPONENT tests
         FILES_MATCHING
         PATTERN "*.py"
+        PATTERN "cg_module_a.hsaco"
+        PATTERN "cg_module_b.hsaco"
         PATTERN "__pycache__" EXCLUDE
     )
     install(
@@ -1154,6 +1157,7 @@ if(INSTALL_TESTS)
             tests/hip_dynamic_shared
             tests/laplace_eqn
             tests/mat_mul_max
+            tests/conjugate_gradient
             tests/rocflop
             tests/memcopy
         DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/tests
