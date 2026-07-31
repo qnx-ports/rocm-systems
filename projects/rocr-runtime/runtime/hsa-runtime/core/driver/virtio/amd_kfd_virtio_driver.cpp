@@ -523,7 +523,7 @@ hsa_status_t KfdVirtioDriver::ExportMemoryHandle(const core::Agent& agent, const
     int dmabuf_fd_res = -1;
     size_t offset_res = 0;
     HSAKMT_STATUS status =
-        vhsaKmtExportDMABufHandle(const_cast<void*>(reinterpret_cast<const void*>(&handle)), handle.size,
+        vhsaKmtExportDMABufHandle(reinterpret_cast<void*>(handle.handle), handle.size,
                                   &dmabuf_fd_res, &offset_res);
     if (status != HSAKMT_STATUS_SUCCESS) {
       if (status == HSAKMT_STATUS_INVALID_PARAMETER) {
@@ -630,7 +630,7 @@ hsa_status_t KfdVirtioDriver::CreateShareableHandle(void* va, void* mem, size_t 
   if (ret != HSA_STATUS_SUCCESS) return ret;
 
   int shareable_fd = -1;
-  ret = ExportMemoryHandle(agent, target_handle, core::ShareType::DMABUF_FD, 0, &shareable_fd);
+  core::DriverMemoryHandle reexport_src = {}; reexport_src.handle = reinterpret_cast<uint64_t>(mem); reexport_src.size = size; ret = ExportMemoryHandle(agent, reexport_src, core::ShareType::DMABUF_FD, 0, &shareable_fd);
   if (ret != HSA_STATUS_SUCCESS) {
     DestroyMemoryHandle(&target_handle);
     return ret;
