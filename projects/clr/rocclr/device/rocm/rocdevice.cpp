@@ -1680,6 +1680,7 @@ bool Device::populateOCLDeviceConstants() {
     LogError("HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED query failed. HMM will be disabled");
   }
 
+  info_.hmmSupported_ = false; // virtio: SVM/HMM (KFD svm ioctls) not proxied over virtio; hostLock fallback + managed tests skip
   // This capability should be available with xnack enabled
   if (HSA_STATUS_SUCCESS != Hsa::system_get_info(HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT,
                                                  &info_.hmmCpuMemoryAccessible_)) {
