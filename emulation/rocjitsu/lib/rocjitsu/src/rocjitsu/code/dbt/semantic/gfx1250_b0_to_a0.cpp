@@ -30,6 +30,12 @@ namespace rocjitsu {
 
 namespace {
 
+[[nodiscard]] bool always_residual(const Instruction &) { return true; }
+[[nodiscard]] bool scale16_residual(const Instruction &inst);
+[[nodiscard]] bool cvt_f32_fp8_e5m3_residual(const Instruction &inst);
+[[nodiscard]] bool cvt_pk_fp8_f32_e5m3_residual(const Instruction &inst);
+[[nodiscard]] bool cvt_sr_fp8_f32_e5m3_residual(const Instruction &inst);
+
 /// @brief gfx1250 special-scalar operand encodings.
 /// @details CRITICAL: on gfx1250 these are the INVERSE of CDNA — M0 = 125 and
 /// NULL = 124, whereas CDNA encodes M0 = 124. Every hand-written encoding below
@@ -667,6 +673,23 @@ struct TensorMaskWrapper {
   return has_canonical_predecessor(inst, build_tensor_mask_clear(descriptor_base));
 }
 
+/// @brief Whether the tensor-load expansion still needs to add its canonical prefix.
+[[nodiscard]] bool tensor_load_residual(const Instruction &inst) {
+  if (inst.mnemonic() != "tensor_load_to_lds" ||
+      inst.size() != static_cast<int>(sizeof(gfx1250::VimageMachineInst)) ||
+      inst.raw_encoding() == nullptr) {
+    return true;
+  }
+
+  gfx1250::VimageMachineInst source{};
+  std::memcpy(&source, inst.raw_encoding(), sizeof(source));
+  constexpr uint8_t kLastOrdinarySgpr = 105;
+  const uint8_t descriptor_base = static_cast<uint8_t>(source.vaddr1);
+  if (descriptor_base == kGfx1250Null || descriptor_base > kLastOrdinarySgpr - 7u)
+    return true;
+  return !has_tensor_mask_clear(inst, descriptor_base);
+}
+
 /// @brief Disable Tensor-DMA multicast for one A0 tensor load.
 ///
 /// @details TENSOR_LOAD_TO_LDS does not encode multicast in the instruction.
@@ -703,7 +726,7 @@ ExpandResult expand_gfx1250_tensor_load_to_lds(const Instruction &inst, uint32_t
         {"Provide TENSOR_LOAD_TO_LDS VADDR1 as an ordinary eight-SGPR descriptor."});
   }
 
-  if (has_tensor_mask_clear(inst, descriptor_base)) {
+  if (!tensor_load_residual(inst)) {
     return ExpandResult::success(std::vector<uint32_t>(
         inst.raw_encoding(),
         inst.raw_encoding() + sizeof(gfx1250::VimageMachineInst) / sizeof(uint32_t)));
@@ -739,6 +762,22 @@ ExpandResult expand_gfx1250_tensor_load_to_lds(const Instruction &inst, uint32_t
 void set_word_field(uint32_t &word, uint32_t value, uint32_t shift, uint32_t width) {
   const uint32_t mask = ((uint32_t{1} << width) - 1) << shift;
   word = (word & ~mask) | ((value << shift) & mask);
+}
+
+/// @brief Whether a regular-Scale compound still needs normalization or splitting.
+[[nodiscard]] bool regular_scale_residual(const Instruction &inst) {
+  if (!inst.mnemonic().starts_with("v_wmma_scale_f32_") ||
+      inst.size() != 4 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr) {
+    return true;
+  }
+
+  gfx1250::Vop3pMachineInst scale{};
+  gfx1250::Vop3pMachineInst matrix{};
+  std::memcpy(&scale, inst.raw_encoding(), sizeof(scale));
+  std::memcpy(&matrix, inst.raw_encoding() + 2, sizeof(matrix));
+  if (gfx1250_floating_wmma_control_error(matrix, &scale) != nullptr)
+    return true;
+  return matrix.op == gfx1250::kVWmmaF3232x16x128F4Vop3p || scale.src2 != 0x100;
 }
 
 /// @brief Emit two A0 M=16 FP4 operations for one M=32 FP4 matrix operation.
@@ -873,8 +912,10 @@ ExpandResult expand_gfx1250_wmma_scale_src2(const Instruction &inst, uint32_t, u
     return ExpandResult::failed(error);
   if (matrix.op != gfx1250::kVWmmaF3232x16x128F4Vop3p) {
     std::vector<uint32_t> words(inst.raw_encoding(), inst.raw_encoding() + 4);
-    // Instruction bits [58:50] occupy word 1 bits [26:18].
-    set_word_field(words[1], 0x100, 18, 9);
+    if (regular_scale_residual(inst)) {
+      // Instruction bits [58:50] occupy word 1 bits [26:18].
+      set_word_field(words[1], 0x100, 18, 9);
+    }
     return ExpandResult::success(std::move(words));
   }
 
@@ -1090,6 +1131,36 @@ ExpandResult expand_gfx1250_wmma_scale16(const Instruction &inst, uint32_t, uint
   return ExpandResult::success(std::move(words));
 }
 
+/// @brief Whether the shared structural key denotes an implemented Scale16 expansion.
+[[nodiscard]] bool scale16_residual(const Instruction &inst) {
+  if (!inst.mnemonic().starts_with("v_wmma_scale16_f32_"))
+    return false;
+  if (inst.size() != 4 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr)
+    return true;
+
+  gfx1250::Vop3pMachineInst scale{};
+  gfx1250::Vop3pMachineInst matrix{};
+  std::memcpy(&scale, inst.raw_encoding(), sizeof(scale));
+  std::memcpy(&matrix, inst.raw_encoding() + 2, sizeof(matrix));
+  if (scale.op != kWmmaScale16PrefixOp ||
+      (matrix.op != gfx1250::kVWmmaF3216x16x128F8f6f4Vop3p &&
+       matrix.op != gfx1250::kVWmmaF3232x16x128F4Vop3p) ||
+      gfx1250_floating_wmma_control_error(matrix, &scale) != nullptr) {
+    return true;
+  }
+
+  constexpr uint16_t kVgprEncoding = 256;
+  for (const uint16_t encoded_scale :
+       {static_cast<uint16_t>(scale.src0), static_cast<uint16_t>(scale.src1)}) {
+    if (encoded_scale < kVgprEncoding)
+      continue;
+    const uint16_t base = static_cast<uint16_t>(encoded_scale - kVgprEncoding);
+    if ((base & 1u) != 0 || base > 254u)
+      return true;
+  }
+  return matrix.op == gfx1250::kVWmmaF3232x16x128F4Vop3p || scale.src2 != 0x100;
+}
+
 /// @brief Conservatively separate B0 integer WMMA from its A0 successor.
 ///
 /// @details gfx1250 requires nine separating V_NOPs when dense IU8 WMMA feeds a
@@ -1099,19 +1170,15 @@ ExpandResult expand_gfx1250_wmma_scale16(const Instruction &inst, uint32_t, uint
 /// the missing slots. Limiting credit to the block guarantees that every
 /// credited word remains adjacent after layout. Noncanonical NOPs and following
 /// control-flow successors conservatively receive no credit.
-ExpandResult expand_gfx1250_wmma_iu8_spacing(const Instruction &inst, uint32_t, uint64_t,
-                                             std::span<const uint8_t>, const LivenessAnalysis &,
-                                             TranslationContext &, const LaneLayout *,
-                                             const LaneLayout *) {
-  if (inst.mnemonic() != "v_wmma_i32_16x16x64_iu8" &&
-      inst.mnemonic() != "v_swmmac_i32_16x16x128_iu8")
-    return ExpandResult::not_handled();
-  if (inst.size() != 2 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr)
-    return ExpandResult::failed("gfx1250 IU8 WMMA rule received an unsupported VOP3P instruction");
+[[nodiscard]] int required_iu8_spacing_slots(const Instruction &inst) {
+  if (inst.mnemonic() == "v_wmma_i32_16x16x64_iu8")
+    return 9;
+  if (inst.mnemonic() == "v_swmmac_i32_16x16x128_iu8")
+    return 5;
+  return 0;
+}
 
-  std::vector<uint32_t> words(inst.raw_encoding(),
-                              inst.raw_encoding() + inst.size() / sizeof(uint32_t));
-  const int required_slots = inst.mnemonic() == "v_wmma_i32_16x16x64_iu8" ? 9 : 5;
+[[nodiscard]] int existing_iu8_spacing_slots(const Instruction &inst, int required_slots) {
   const uint32_t v_nop = gfx1250::build_vop1(gfx1250::kVNopVop1)[0];
   int existing_slots = 0;
   const Instruction *next = inst.next_instruction();
@@ -1121,6 +1188,32 @@ ExpandResult expand_gfx1250_wmma_iu8_spacing(const Instruction &inst, uint32_t, 
     ++existing_slots;
     next = next->next_instruction();
   }
+  return existing_slots;
+}
+
+[[nodiscard]] bool iu8_spacing_residual(const Instruction &inst) {
+  const int required_slots = required_iu8_spacing_slots(inst);
+  if (required_slots == 0)
+    return false;
+  if (inst.size() != 2 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr)
+    return true;
+  return existing_iu8_spacing_slots(inst, required_slots) < required_slots;
+}
+
+ExpandResult expand_gfx1250_wmma_iu8_spacing(const Instruction &inst, uint32_t, uint64_t,
+                                             std::span<const uint8_t>, const LivenessAnalysis &,
+                                             TranslationContext &, const LaneLayout *,
+                                             const LaneLayout *) {
+  const int required_slots = required_iu8_spacing_slots(inst);
+  if (required_slots == 0)
+    return ExpandResult::not_handled();
+  if (inst.size() != 2 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr)
+    return ExpandResult::failed("gfx1250 IU8 WMMA rule received an unsupported VOP3P instruction");
+
+  std::vector<uint32_t> words(inst.raw_encoding(),
+                              inst.raw_encoding() + inst.size() / sizeof(uint32_t));
+  const int existing_slots = existing_iu8_spacing_slots(inst, required_slots);
+  const uint32_t v_nop = gfx1250::build_vop1(gfx1250::kVNopVop1)[0];
 
   // TODO: Replace canonical V_NOP counting with whole-kernel scheduling that
   // can also credit independent VALU in each reachable successor.
@@ -1152,6 +1245,14 @@ ExpandResult expand_gfx1250_wmma_iu8_spacing(const Instruction &inst, uint32_t, 
                              {.ssrc0 = kGfx1250InlineZero, .sdst = kGfx1250M0})[0];
 }
 
+[[nodiscard]] bool cluster_load_residual(const Instruction &inst) {
+  if (!is_gfx1250_cluster_load(inst.opcode()))
+    return false;
+  if (inst.size() != 3 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr)
+    return true;
+  return !has_canonical_predecessor(inst, build_cluster_m0_clear());
+}
+
 /// @brief Rewrite a gfx1250 cluster load to run with M0 = 0.
 ///
 /// @details Every cluster-load form (both SADDR and off/NULL-saddr, all widths)
@@ -1177,7 +1278,7 @@ ExpandResult expand_gfx1250_cluster_load(const Instruction &inst, uint32_t, uint
     return ExpandResult::failed("gfx1250 cluster-load rule received an unsupported instruction");
   }
 
-  if (has_canonical_predecessor(inst, build_cluster_m0_clear())) {
+  if (!cluster_load_residual(inst)) {
     return ExpandResult::success(
         std::vector<uint32_t>(inst.raw_encoding(), inst.raw_encoding() + 3));
   }
@@ -1871,7 +1972,7 @@ ExpandResult expand_gfx1250_cvt_f32_fp8_e5m3(const Instruction &inst, uint32_t, 
   gfx1250::Vop3MachineInst source{};
   std::memcpy(&source, inst.raw_encoding(), sizeof(source));
   constexpr uint16_t kVgprEncoding = 256;
-  if (source.clamp == 0)
+  if (!cvt_f32_fp8_e5m3_residual(inst))
     return ExpandResult::not_handled();
   // ABS, NEG, and OMOD are unsupported for this conversion and do not affect
   // its result, so their encoded values are intentionally ignored.
@@ -2014,6 +2115,36 @@ ExpandResult expand_gfx1250_cvt_f32_fp8_e5m3(const Instruction &inst, uint32_t, 
   if (!prepend_gfx1250_execz_guard_for_masked_replacement(words, masks->has_carrier()))
     return ExpandResult::failed("gfx1250 E5M3 unpack SGPR-carrier guard is too large");
   return ExpandResult::success(std::move(words));
+}
+
+[[nodiscard]] bool cvt_f32_fp8_e5m3_residual(const Instruction &inst) {
+  if (!inst.mnemonic().starts_with("v_cvt_f32_fp8") ||
+      inst.size() != 2 * static_cast<int>(sizeof(uint32_t)) || inst.raw_encoding() == nullptr) {
+    return true;
+  }
+  gfx1250::Vop3MachineInst source{};
+  std::memcpy(&source, inst.raw_encoding(), sizeof(source));
+  return source.clamp != 0;
+}
+
+[[nodiscard]] bool cvt_fp8_f32_e5m3_residual(const Instruction &inst,
+                                             std::string_view mnemonic) {
+  if (inst.mnemonic() != mnemonic ||
+      inst.size() < static_cast<int>(sizeof(gfx1250::Vop3MachineInst)) ||
+      inst.raw_encoding() == nullptr) {
+    return true;
+  }
+  gfx1250::Vop3MachineInst source{};
+  std::memcpy(&source, inst.raw_encoding(), sizeof(source));
+  return source.clamp != 0;
+}
+
+[[nodiscard]] bool cvt_pk_fp8_f32_e5m3_residual(const Instruction &inst) {
+  return cvt_fp8_f32_e5m3_residual(inst, "v_cvt_pk_fp8_f32");
+}
+
+[[nodiscard]] bool cvt_sr_fp8_f32_e5m3_residual(const Instruction &inst) {
+  return cvt_fp8_f32_e5m3_residual(inst, "v_cvt_sr_fp8_f32");
 }
 
 /// @brief Wrap a standalone low-precision WMMA in an A0-safe neutral scale prefix.
@@ -2346,25 +2477,25 @@ inline constexpr std::array<TranslationRule, 41> kGfx1250B0ToA0ExpandRules = {{
     {gfx1250::encoding::kSop1, gfx1250::kSBarrierSignalIsfirstSop1, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_barrier_signal_isfirst, nullptr, nullptr, false},
     {gfx1250::encoding::kSopp, gfx1250::kSClauseSopp, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_s_clause, nullptr, nullptr, false},
+     expand_gfx1250_s_clause, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3p, gfx1250::kVWmmaF3216x16x128F8f6f4Vop3p, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_bare_f8f6f4_wmma, nullptr, nullptr, false},
+     nullptr, expand_gfx1250_bare_f8f6f4_wmma, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3p, kWmmaScaleSrc2PrefixOp, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_wmma_scale_src2, nullptr, nullptr},
+     expand_gfx1250_wmma_scale_src2, nullptr, nullptr, true, regular_scale_residual},
     {gfx1250::encoding::kVop3p, kWmmaScale16PrefixOp, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_wmma_scale16, nullptr, nullptr},
+     expand_gfx1250_wmma_scale16, nullptr, nullptr, true, scale16_residual},
     {gfx1250::encoding::kVop3p, gfx1250::kVWmmaI3216x16x64Iu8Vop3p, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false},
+     nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false, iu8_spacing_residual},
     {gfx1250::encoding::kVop3p, gfx1250::kVSwmmacI3216x16x128Iu8Vop3p, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false},
+     nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false, iu8_spacing_residual},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3216x16x128Fp8Fp8Vop3p, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false},
+     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3216x16x128Fp8Bf8Vop3p, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false},
+     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3216x16x128Bf8Fp8Vop3p, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false},
+     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3216x16x128Bf8Bf8Vop3p, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false},
+     0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false, always_residual},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF1616x16x128Fp8Fp8Vop3p, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF1616x16x128Fp8Bf8Vop3p, RuleAction::Expand, 0,
@@ -2374,57 +2505,59 @@ inline constexpr std::array<TranslationRule, 41> kGfx1250B0ToA0ExpandRules = {{
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF1616x16x128Bf8Bf8Vop3p, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3232x16x128F4Vop3p, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_wmma_32x16_f4, nullptr, nullptr},
+     nullptr, expand_gfx1250_wmma_32x16_f4, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVimage, gfx1250::kTensorLoadToLdsVimage, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_tensor_load_to_lds, nullptr, nullptr},
+     expand_gfx1250_tensor_load_to_lds, nullptr, nullptr, true, tensor_load_residual},
     {gfx1250::encoding::kVop3OpHi3, gfx1250::kVCvtF32Fp8Vop3, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_cvt_f32_fp8_e5m3, nullptr, nullptr},
+     expand_gfx1250_cvt_f32_fp8_e5m3, nullptr, nullptr, true, cvt_f32_fp8_e5m3_residual},
     {gfx1250::encoding::kVop3OpHi6, gfx1250::kVCvtPkFp8F32Vop3, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_cvt_pk_fp8_f32_e5m3, nullptr, nullptr},
+     expand_gfx1250_cvt_pk_fp8_f32_e5m3, nullptr, nullptr, true,
+     cvt_pk_fp8_f32_e5m3_residual},
     {gfx1250::encoding::kVop3OpHi6, gfx1250::kVCvtSrFp8F32Vop3, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_cvt_sr_fp8_f32_e5m3, nullptr, nullptr},
+     expand_gfx1250_cvt_sr_fp8_f32_e5m3, nullptr, nullptr, true,
+     cvt_sr_fp8_f32_e5m3_residual},
     {gfx1250::encoding::kVds, gfx1250::kDsStore2addrB32Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds2, nullptr, nullptr},
+     expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVds, gfx1250::kDsStore2addrStride64B32Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi1, gfx1250::kDsStorexchg2addrRtnB32Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi1, gfx1250::kDsStorexchg2addrStride64RtnB32Vds, RuleAction::Expand,
-     0, 0, nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     0, 0, nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi1, gfx1250::kDsLoad2addrB32Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds2, nullptr, nullptr},
+     expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi1, gfx1250::kDsLoad2addrStride64B32Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi2, gfx1250::kDsStore2addrB64Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds2, nullptr, nullptr},
+     expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi2, gfx1250::kDsStore2addrStride64B64Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi3, gfx1250::kDsStorexchg2addrRtnB64Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi3, gfx1250::kDsStorexchg2addrStride64RtnB64Vds, RuleAction::Expand,
-     0, 0, nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     0, 0, nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi3, gfx1250::kDsLoad2addrB64Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds2, nullptr, nullptr},
+     expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi3, gfx1250::kDsLoad2addrStride64B64Vds, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_ds2, nullptr, nullptr},
+     nullptr, expand_gfx1250_ds2, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi5, gfx1250::kDsStoreAddtidB32Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds_addtid, nullptr, nullptr},
+     expand_gfx1250_ds_addtid, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVdsOpHi5, gfx1250::kDsLoadAddtidB32Vds, RuleAction::Expand, 0, 0, nullptr,
-     expand_gfx1250_ds_addtid, nullptr, nullptr},
+     expand_gfx1250_ds_addtid, nullptr, nullptr, true, always_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB32Vglobal, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB64Vglobal, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB128Vglobal, RuleAction::Expand, 0, 0,
-     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB8Vglobal, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB32Vglobal, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB64Vglobal, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB128Vglobal, RuleAction::Expand, 0,
-     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr},
+     0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true, cluster_load_residual},
 }};
 
 } // namespace
