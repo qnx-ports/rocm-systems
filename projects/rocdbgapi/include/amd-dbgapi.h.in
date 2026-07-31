@@ -3487,7 +3487,9 @@ typedef enum
   /**
    * The workgroup workgroup coordinate in the dispatch grid dimensions.  The
    * type of this attribute is \p uint32_t[3] with elements 1, 2, and 3
-   * corresponding to the X, Y, and Z coordinates respectively.
+   * corresponding to the X, Y, and Z coordinates respectively.  The
+   * coordinate values are in units of number of workitems in the workgroup
+   * in X, Y, Z dimensions, respectively.
    *
    * If the dispatch associated with a workgroup is not available then
    * ::amd_dbgapi_workgroup_get_info returns
@@ -3714,7 +3716,9 @@ typedef enum
   /**
    * The wave workgroup coordinate in the dispatch grid dimensions.  The type
    * of this attribute is \p uint32_t[3] with elements 1, 2, and 3
-   * corresponding to the X, Y, and Z coordinates respectively.
+   * corresponding to the X, Y, and Z coordinates respectively.  The
+   * coordinate values are in units of number of workitems in the workgroup
+   * in X, Y, Z dimensions, respectively.
    *
    * If the dispatch associated with a wave is not available then
    * ::amd_dbgapi_wave_get_info returns
