@@ -3787,7 +3787,14 @@ hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, ui
 
         int fd;
         uint64_t off;
+#ifdef HSAKMT_VIRTIO_ENABLED
+        // VMM/portable dmabuf export must go through the virtio thunk; the
+        // HSAKMT_CALL path resolves to the real-KFD thunk which is not open
+        // over virtio (mirrors AllocMemoryAlign / VMemoryAddressFree).
+        hsa_status_t err = (vhsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off) == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+#else
         hsa_status_t err = (HSAKMT_CALL(hsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off)) == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+#endif
         if (err != HSA_STATUS_SUCCESS) {
           assert((err != HSA_STATUS_ERROR_INVALID_ARGUMENT) &&
                  "Thunk does not recognize an expected allocation.");
