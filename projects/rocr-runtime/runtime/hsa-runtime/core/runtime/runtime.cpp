@@ -3867,7 +3867,15 @@ hsa_status_t Runtime::VMemoryAddressFree(void* va, size_t size) {
   }
 
   if (it->second.registered) {
+#ifdef HSAKMT_VIRTIO_ENABLED
+    // Mirror Runtime::AllocMemoryAlign: VMM reservations are created via the
+    // virtio thunk (vhsaKmtAllocMemoryAlign), so free them the same way. Using
+    // HSAKMT_CALL(hsaKmtFreeMemory) here hits the real-KFD thunk, which returns
+    // KERNEL_IO_CHANNEL_NOT_OPENED over virtio and breaks hipMemAddressFree.
+    if (vhsaKmtFreeMemory(it->second.os_addr, size) != HSAKMT_STATUS_SUCCESS)
+#else
     if (HSAKMT_CALL(hsaKmtFreeMemory(it->second.os_addr, size)) != HSAKMT_STATUS_SUCCESS)
+#endif
     {
       return HSA_STATUS_ERROR;
     }
