@@ -1624,6 +1624,13 @@ bool Device::populateOCLDeviceConstants() {
     info_.pcieDeviceId_ = pciDeviceId_;
     info_.cooperativeGroups_ = settings().enableCoopGroups_;
     info_.cooperativeMultiDeviceGroups_ = settings().enableCoopMultiDeviceGroups_;
+    // virtio: cooperative launch needs GWS (grid-wide wave sync) which is not
+    // proxied over virtio (backend reports NumGws=0), so a cooperative dispatch
+    // never completes and hangs (KernelTest hipLaunchKernelEx*, coopGrpTest).
+    // Report cooperative groups unsupported so those tests skip instead of
+    // hanging (mirrors the hmmSupported_ handling below).
+    info_.cooperativeGroups_ = false;
+    info_.cooperativeMultiDeviceGroups_ = false;
     // Enable StreamWrite and StreamWait for all devices
     info_.aqlBarrierValue_ = true;
   }
