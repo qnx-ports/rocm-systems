@@ -585,6 +585,18 @@ hsa_status_t KfdVirtioDriver::Map(const core::DriverMemoryHandle& handle, void* 
                        drm_perm(perms), AMDGPU_VA_OP_MAP) != 0)
     return HSA_STATUS_ERROR;
 
+  // Back the reserved guest VA with the physical allocation on the CPU side.
+  // virtio-gpu guests reach host device memory through a mappable blob; map the
+  // owning allocation's blob at the reserved VA (MAP_FIXED) so CPU accesses to
+  // VMM-mapped memory (e.g. the HIP memory-pool / VmHeap sub-allocator) resolve,
+  // mirroring the GPU-side amdgpu VA mapping established above.
+  if (vhsaKmtVirtioMapHandleToVA(reinterpret_cast<void*>(handle.handle), mem, size) !=
+      HSAKMT_STATUS_SUCCESS) {
+    vamdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem), 0,
+                     AMDGPU_VA_OP_UNMAP);
+    return HSA_STATUS_ERROR;
+  }
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -593,6 +605,9 @@ hsa_status_t KfdVirtioDriver::Unmap(const core::DriverMemoryHandle& handle, void
   const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
   if (!ldrm_bo)
     return HSA_STATUS_ERROR;
+
+  // Tear down the CPU-side blob mapping established in Map().
+  vhsaKmtVirtioUnmapHandleFromVA(mem, size);
 
   if (vamdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem), 0,
                       AMDGPU_VA_OP_UNMAP) != 0)
