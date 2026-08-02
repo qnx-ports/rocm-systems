@@ -27,8 +27,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
 
 #include "virtio_gpu.h"
 
@@ -262,26 +260,7 @@ out:
 
 int virtio_gpu_create_blob(struct virtio_gpu_device* vgdev,
                            struct drm_virtgpu_resource_create_blob* args) {
-  int r = virtio_gpu_ioctl(vgdev->fd, VIRTGPU_RESOURCE_CREATE_BLOB, args);
-  /* Transient virtio-gpu resource pressure: the guest object pool can be
-   * momentarily full while just-freed blobs still await the kernel's deferred
-   * release workqueue (virtio_gpu_array_put_free_work) sending their
-   * RESOURCE_UNREF to the host. Under a rapid alloc/free storm (e.g. the HIP
-   * graph test suite creating and destroying many streams/graphs back to back)
-   * this makes an otherwise-satisfiable blob creation fail, surfacing as
-   * hipStreamCreate/hipMalloc "out of memory" even though nothing leaked. Yield
-   * so the release workqueue can drain pending frees, then retry a bounded
-   * number of times with backoff before giving up. */
-  if (r) {
-    int attempt;
-    for (attempt = 0; r && attempt < 10; attempt++) {
-      usleep((useconds_t)200 << (attempt < 6 ? attempt : 6)); /* 0.2ms .. ~12.8ms */
-      r = virtio_gpu_ioctl(vgdev->fd, VIRTGPU_RESOURCE_CREATE_BLOB, args);
-    }
-    if (getenv("VHSA_BLOB_RETRY_DEBUG"))
-      fprintf(stderr, "[vgpu_blob_retry] attempts=%d final_r=%d\n", attempt, r);
-  }
-  return r;
+  return virtio_gpu_ioctl(vgdev->fd, VIRTGPU_RESOURCE_CREATE_BLOB, args);
 }
 
 int virtio_gpu_destroy_handle(struct virtio_gpu_device* vgdev, uint32_t bo_handle) {
