@@ -3,15 +3,25 @@
 Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/](https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/).
 
 
-## ROCm Compute Profiler 3.9.0 for ROCm 7.16.0
+## ROCm Compute Profiler 3.9.0 for ROCm 10.1.0
 
 ### Added
 
 ### Changed
 
+* ML API tracing options (--torch-trace/--triton-trace/--ml-api-trace) are no longer allowed with PC-sampling-only profiling; the run now fails with an error telling the user to drop the ML API tracing flag or add a counter block, since without counters there is nothing to correlate the markers against.
+
+* Deprecated the `--join-type` profile mode option; it no longer has any effect and will be removed in a future release.
+
 ### Removed
 
+* Removed the CSV profile output backend and the `--format-rocprof-output` profile mode option. Profiling now always uses the `rocpd` output format, which was already the default.
+
+* Removed analyze support for workloads produced by the CSV profile backend. Such workloads are now rejected with an error telling you to re-profile with a current release.
+
 ### Optimized
+
+* Reduced profile-mode peak memory when writing counter data on large workloads.
 
 ### Resolved issues
 
@@ -19,7 +29,7 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 
 ### Known issues
 
-## ROCm Compute Profiler 3.8.0 for ROCm 7.15.0
+## ROCm Compute Profiler 3.8.0 for ROCm 10.0.0
 
 ### Added
 
@@ -143,7 +153,7 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 
 ### Upcoming changes
 
-* Roofline support for RDNA3.5 gfx115x devices.
+* Roofline support for gfx1153 devices.
 
 ### Known issues
 

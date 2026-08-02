@@ -9,10 +9,12 @@ from unittest.mock import Mock, patch
 import common
 import pytest
 
+from pc_sampling.pc_sampling_profile import PCSamplingLimits
 from rocprof_compute_base import RocProfCompute
 from rocprof_compute_profile.profiler_base import RocProfCompute_Base
 from rocprof_compute_profile.profiler_rocprof_v3 import rocprof_v3_profiler
 from rocprof_compute_profile.profiler_rocprofiler_sdk import rocprofiler_sdk_profiler
+from utils.utils_common import PROFILE_OUTPUT_FORMAT
 from utils.utils_exceptions import (
     ExecutableNotFoundError,
     NoScriptInCommandError,
@@ -160,6 +162,65 @@ def test_sanitize_torch_trace(tmp_path, remaining, expected_exception, setup):
 
 
 # ---------------------------------------------------------------------------
+# sanitize() rejects ML API tracing flags for PC-sampling-only runs
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "filter_blocks, trace_flags, expect_error, expected_frameworks",
+    [
+        pytest.param(
+            ["21"],
+            {"torch_trace": True},
+            True,
+            None,
+            id="pc_only_torch_trace_errors",
+        ),
+        pytest.param(
+            ["pc_sampling"],
+            {"ml_api_trace": True},
+            True,
+            None,
+            id="pc_only_ml_api_trace_errors",
+        ),
+        pytest.param(
+            ["21"],
+            {"triton_trace": True},
+            True,
+            None,
+            id="pc_only_triton_trace_errors",
+        ),
+        pytest.param(
+            ["2", "21"],
+            {"torch_trace": True},
+            False,
+            {"torch"},
+            id="mixed_torch_trace_preserved",
+        ),
+        pytest.param(
+            ["21"],
+            {},
+            False,
+            set(),
+            id="pc_only_no_trace_flag",
+        ),
+    ],
+)
+def test_sanitize_pc_sampling_only_rejects_ml_api_tracing_flags(
+    tmp_path, filter_blocks, trace_flags, expect_error, expected_frameworks
+):
+    """ML API tracing flags are rejected for PC-sampling-only runs and retained when a
+    counter block is also requested."""
+    remaining = _setup_test_files(tmp_path, ["{binary}"], "binary")
+    args = _make_sanitize_args(remaining, filter_blocks=filter_blocks, **trace_flags)
+    profiler = RocProfCompute_Base(args, profiler_mode="rocprofiler-sdk", soc=None)
+    if expect_error:
+        with pytest.raises(SystemExit):
+            profiler.sanitize()
+    else:
+        profiler.sanitize()
+        assert profiler._selected_frameworks == expected_frameworks
+
+
+# ---------------------------------------------------------------------------
 # sanitize() without --torch-trace
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
@@ -253,7 +314,6 @@ def test_attach_library_resolution_with_fallback():
     args = argparse.Namespace(
         remaining="-- /bin/true",
         rocprofiler_sdk_tool_path="/opt/rocm/lib/rocprofiler-sdk/librocprofiler-sdk-tool.so",
-        format_rocprof_output="csv",
         output_directory=str(output_dir),
         iteration_multiplexing=None,
         attach_pid=12345,
@@ -300,13 +360,47 @@ def test_attach_library_resolution_with_fallback():
     common.clean_output_dir(True, str(output_dir))
 
 
+def test_sdk_profiler_options_preserve_ld_preload_and_set_env(tmp_path, monkeypatch):
+    """get_profiler_options appends the profiler libs to the user's LD_PRELOAD
+    and sets counter-collection mode from whether a native tool is present."""
+    args = argparse.Namespace(
+        remaining="my_app --flag",
+        rocprofiler_sdk_tool_path="sdk_tool",
+        output_directory=str(tmp_path / "workload"),
+        iteration_multiplexing=None,
+        attach_pid=None,
+        attach_duration_msec=None,
+        kokkos_trace=False,
+        kernel=None,
+        dispatch=None,
+        torch_trace=False,
+    )
+    profiler = rocprofiler_sdk_profiler(args, profiler_mode="rocprofiler-sdk", soc=None)
+
+    # User LD_PRELOAD preserved first, profiler libs appended in order; a native
+    # tool means the SDK does not collect counters itself.
+    monkeypatch.setenv("LD_PRELOAD", "user_lib")
+    options = profiler.get_profiler_options(native_tool_path="native_tool")
+    assert options["LD_PRELOAD"] == "user_lib:sdk_tool:native_tool"
+    assert options["ROCPROF_COUNTER_COLLECTION"] == "0"
+    assert options["ROCPROF_KERNEL_TRACE"] == "1"
+    assert options["ROCPROF_OUTPUT_FORMAT"] == PROFILE_OUTPUT_FORMAT
+    assert options["ROCPROF_OUTPUT_PATH"] == f"{tmp_path / 'workload'}/out/pmc_1"
+    assert options["APP_CMD"] == ["my_app", "--flag"]
+
+    # No user LD_PRELOAD and no native tool: only the SDK lib, SDK collects.
+    monkeypatch.delenv("LD_PRELOAD", raising=False)
+    options = profiler.get_profiler_options()
+    assert options["LD_PRELOAD"] == "sdk_tool"
+    assert options["ROCPROF_COUNTER_COLLECTION"] == "1"
+
+
 def test_rocprofv3_live_attach_uses_sync_output():
     """Unit test: rocprofv3 live attach requests synchronous output generation."""
     args = _make_sanitize_args(
         ["/bin/true"],
         attach_pid="12345",
         attach_duration_msec="500",
-        format_rocprof_output="csv",
         kokkos_trace=False,
     )
     args.remaining = "-- /bin/true"
@@ -346,7 +440,6 @@ def test_sdk_pc_sampling_options(
     args = _make_sanitize_args(
         ["/bin/true"],
         rocprofiler_sdk_tool_path="/opt/sdk/tool.so",
-        format_rocprof_output="csv",
         output_directory=str(tmp_path),
         pc_sampling_method=method,
         pc_sampling_interval=1000,
@@ -449,7 +542,6 @@ def _make_rpc_args(
         roof_only=False,
         bench_only=False,
         no_roof=False,
-        format_rocprof_output="csv",
         name="unit-test",
         output_directory="/tmp/unit-test",
     )
@@ -462,6 +554,15 @@ def _make_rpc_with_args(args: argparse.Namespace) -> RocProfCompute:
     instance._RocProfCompute__args = args
     instance._RocProfCompute__mode = args.mode
     return instance
+
+
+def _fake_pc_sampling_limits(method: str, _sdk_tool_path=None) -> PCSamplingLimits:
+    """Stub of the device query, using the limits a gfx950 reports."""
+    return PCSamplingLimits(
+        min_interval=256 if method == "stochastic" else 1,
+        max_interval=1048576,
+        interval_pow2=method == "stochastic",
+    )
 
 
 @pytest.mark.parametrize(
@@ -673,18 +774,30 @@ def test_run_profiling_pc_sampling_gating(
     [
         pytest.param("host_trap", None, False, 512, id="host_trap_unset_default"),
         pytest.param("stochastic", None, False, 1048576, id="stochastic_unset_default"),
-        pytest.param("stochastic", 65536, False, 65536, id="stochastic_min_accepted"),
+        pytest.param("stochastic", 256, False, 256, id="stochastic_min_accepted"),
+        pytest.param(
+            "stochastic", 1048576, False, 1048576, id="stochastic_max_accepted"
+        ),
         pytest.param("stochastic", 12345, True, None, id="stochastic_not_pow2"),
-        pytest.param("stochastic", 32768, True, None, id="stochastic_below_min"),
+        pytest.param("stochastic", 128, True, None, id="stochastic_below_min"),
+        pytest.param("stochastic", 67108864, True, None, id="stochastic_above_max"),
         pytest.param("host_trap", 100, False, 100, id="host_trap_positive_accepted"),
+        pytest.param("host_trap", 2097152, True, None, id="host_trap_above_max"),
         pytest.param("host_trap", 0, True, None, id="host_trap_zero_rejected"),
         pytest.param("host_trap", -1, True, None, id="host_trap_negative_rejected"),
     ],
 )
 def test_sanitize_pc_sampling_interval(
-    method, interval, expect_error, expected_interval
+    method, interval, expect_error, expected_interval, monkeypatch
 ):
-    """Unit test: --pc-sampling-interval default and stochastic validation."""
+    """Unit test: --pc-sampling-interval default and range validation.
+
+    The device query is stubbed so the bounds do not depend on the host GPU.
+    """
+    monkeypatch.setattr(
+        "rocprof_compute_base.pc_sampling_interval_limits",
+        _fake_pc_sampling_limits,
+    )
     args = _make_rpc_args(
         pc_sampling=True,
         experimental=True,
@@ -699,6 +812,47 @@ def test_sanitize_pc_sampling_interval(
     else:
         instance.sanitize()
         assert args.pc_sampling_interval == expected_interval
+
+
+def test_sanitize_pc_sampling_default_interval_out_of_range(monkeypatch):
+    """The method default is validated too, not just a user-supplied value."""
+    monkeypatch.setattr(
+        "rocprof_compute_base.pc_sampling_interval_limits",
+        lambda _method, _sdk_tool_path=None: PCSamplingLimits(
+            min_interval=256, max_interval=65536, interval_pow2=True
+        ),
+    )
+    args = _make_rpc_args(
+        pc_sampling=True,
+        experimental=True,
+        filter_blocks=[],
+        pc_sampling_method="stochastic",
+        pc_sampling_interval=None,
+    )
+    instance = _make_rpc_with_args(args)
+
+    with pytest.raises(SystemExit):
+        instance.sanitize()
+
+
+@pytest.mark.parametrize("interval", [None, 262144], ids=["default", "explicit"])
+def test_sanitize_pc_sampling_method_unsupported(interval, monkeypatch):
+    """A method no agent reports is rejected before the workload launches."""
+    monkeypatch.setattr(
+        "rocprof_compute_base.pc_sampling_interval_limits",
+        lambda _method, _sdk_tool_path=None: None,
+    )
+    args = _make_rpc_args(
+        pc_sampling=True,
+        experimental=True,
+        filter_blocks=[],
+        pc_sampling_method="stochastic",
+        pc_sampling_interval=interval,
+    )
+    instance = _make_rpc_with_args(args)
+
+    with pytest.raises(SystemExit):
+        instance.sanitize()
 
 
 # ---------------------------------------------------------------------------
