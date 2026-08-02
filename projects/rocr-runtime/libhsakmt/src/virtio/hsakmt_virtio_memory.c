@@ -325,15 +325,15 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtAllocMemoryAlign(HSAuint32 PreferredNode, HSAuint
   if (!rsp) return -ENOMEM;
 
   vhsakmt_execbuf_cpu(dev, &req.hdr, __FUNCTION__);
-  if (rsp->ret) return rsp->ret;
+  if (rsp->ret) { vhsa_err("AMEMFAIL host_rsp_ret=%d size=%lx\n", rsp->ret, SizeInBytes); return rsp->ret; }
 
-  if (!rsp->memory_handle) return -ENOMEM;
+  if (!rsp->memory_handle) { vhsa_err("AMEMFAIL no_mem_handle size=%lx\n", SizeInBytes); return -ENOMEM; }
 
   r = vhsakmt_init_host_blob(dev, SizeInBytes, VIRTGPU_BLOB_MEM_HOST3D,
                              (vhsakmt_mappable(MemFlags) || MemFlags.ui32.NoAddress)
                                  ? VIRTGPU_BLOB_FLAG_USE_MAPPABLE : 0,
                              req.blob_id, VHSA_BO_KFD_MEM, (void*)rsp->memory_handle, &bo);
-  if (r) return r;
+  if (r) { vhsa_err("AMEMFAIL init_host_blob=%d size=%lx\n", r, SizeInBytes); return r; }
   bo->flags = MemFlags;
 
   if (!vhsakmt_mappable(MemFlags)) {
@@ -345,6 +345,7 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtAllocMemoryAlign(HSAuint32 PreferredNode, HSAuint
   } else {
     r = vhsakmt_bo_cpu_map(bo, &bo->cpu_addr, bo->host_addr);
     if (r) {
+      vhsa_err("AMEMFAIL cpu_map=%d size=%lx\n", r, SizeInBytes);
       free(bo);
       return -ENOMEM;
     }
