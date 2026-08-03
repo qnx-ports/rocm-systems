@@ -489,6 +489,10 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtMapMemoryToGPUNodes(void* MemoryAddress, HSAuint6
   }
 
   if (!bo) {
+    /* ROCR-VMEM-DIAG: kernarg map fail root cause -- no BO registered for this gva. */
+    vhsa_err("%s: NOBO gva=%p size=0x%lx nodes=%lu use_svm=%d (-> AllowAccess OOM -> Code-2)\n",
+             __FUNCTION__, MemoryAddress, (unsigned long)MemorySizeInBytes,
+             (unsigned long)NumberOfNodes, dev->use_svm);
     free(req);
     return HSAKMT_STATUS_INVALID_HANDLE;
   }
