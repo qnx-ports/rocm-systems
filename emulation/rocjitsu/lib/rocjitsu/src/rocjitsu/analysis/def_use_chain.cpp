@@ -87,6 +87,8 @@ InstDefUse::InstDefUse(const Instruction &inst, const Gfx1250VgprMsbAnalysis *vg
       continue;
     if (auto ref = op->to_register_ref())
       add_def(*this, inst, *op, *ref, vgpr_msb, unknown_vgpr_defs);
+    else if (auto sc = op->to_special_reg_class())
+      defs.expand(RegisterRef{*sc, 0, 1}); // singleton special def
   }
   // No generated instruction currently reports an implicit VGPR def. If one is
   // added for gfx1250, it must expose an operand with a VGPR-MSB role so global
@@ -101,6 +103,8 @@ InstDefUse::InstDefUse(const Instruction &inst, const Gfx1250VgprMsbAnalysis *vg
     if (auto ref = op->to_register_ref())
       expand_operand_register(uses, inst, *op, *ref, vgpr_msb, OperandExpansionKind::Use,
                               unknown_vgpr_defs);
+    else if (auto sc = op->to_special_reg_class())
+      uses.expand(RegisterRef{*sc, 0, 1}); // singleton special use
   }
 
   if (vgpr_msb == nullptr) {
