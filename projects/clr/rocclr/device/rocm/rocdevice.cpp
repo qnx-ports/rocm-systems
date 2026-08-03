@@ -2535,19 +2535,7 @@ bool Device::SetMemAccess(void* va_addr, size_t va_size, VmmAccess access_flags,
   desc.agent_handle =
       access_location == VmmLocationType::kDevice ? getBackendDevice() : getCpuAgent();
 
-  hsa_status = Hsa::vmem_set_access(va_addr, va_size, &desc, 1);
-  // On the virtio path the host GPU-VA / mapping resources can be transiently
-  // exhausted under a rapid stream create/destroy storm while just-freed
-  // mappings are still being reclaimed by the host. Retry (bounded, with a short
-  // backoff) so an otherwise-satisfiable per-stream kernarg mapping does not fail
-  // with OUT_OF_RESOURCES, which surfaces to the app as hipStreamCreate/hipMalloc
-  // "out of memory" even though nothing is leaked.
-  for (int attempt = 0;
-       hsa_status == HSA_STATUS_ERROR_OUT_OF_RESOURCES && attempt < 40; ++attempt) {
-    amd::Os::sleep(attempt < 8 ? 2 : 10);  // ms; let the host reclaim freed VA
-    hsa_status = Hsa::vmem_set_access(va_addr, va_size, &desc, 1);
-  }
-  if (hsa_status != HSA_STATUS_SUCCESS) {
+  if ((hsa_status = Hsa::vmem_set_access(va_addr, va_size, &desc, 1)) != HSA_STATUS_SUCCESS) {
     LogPrintfError("Failed hsa_amd_vmem_set_access. Failed with status:%d", hsa_status);
     return false;
   }
