@@ -1156,6 +1156,15 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
        * and provide additional information from hsaKmtQueryPointerInfo.
        */
       if (!(retInfo.type == HSA_EXT_POINTER_TYPE_RESERVED_ADDR && !retInfo.registered)) {
+        /* Populate block_info on this VMM fast-path too. Callers use block_info as the
+         * owning block; leaving it at its {0,0} init here makes MemoryRegion::AllowAccess
+         * compute a (NULL,0) range and fail with OUT_OF_RESOURCES (spurious OOM). For a
+         * VMM allocation the owning block is the allocation itself. */
+        if (block_info != nullptr) {
+          block_info->base =
+              retInfo.hostBaseAddress ? retInfo.hostBaseAddress : retInfo.agentBaseAddress;
+          block_info->length = retInfo.sizeInBytes;
+        }
         memcpy(info, &retInfo, retInfo.size);
         return HSA_STATUS_SUCCESS;
       }
