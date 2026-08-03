@@ -50,7 +50,6 @@
 #include <algorithm>
 #include <mutex>
 #include <shared_mutex>
-#include <cstdio>  /* ROCR-VMEM-DIAG */
 
 #include "core/inc/runtime.h"
 #include "core/inc/amd_cpu_agent.h"
@@ -477,15 +476,6 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
       num_agents = union_agents.size();
       size = blockInfo.length;
       ptr = blockInfo.base;
-    } else if (info.type != HSA_EXT_POINTER_TYPE_UNKNOWN &&
-               (blockInfo.base == nullptr || blockInfo.length == 0) &&
-               (blockInfo.length != size || info.sizeInBytes != size)) {
-      /* ROCR-VMEM-DIAG: the degenerate block the guard above just suppressed. info.type:
-       * 6=HSA_VMEM / 5=RESERVED_ADDR => VMemoryPtrInfo fast-path (mech B, no host thunk);
-       * 1=HSA => host QueryPointerInfo returned {0,0} (mech A). */
-      fprintf(stderr, "ROCR-DEGEN-BLOCK ptr=%p size=0x%zx info.type=%u info.sizeInBytes=0x%zx "
-              "block.base=%p block.length=0x%zx\n", const_cast<void*>(ptr), size,
-              (unsigned)info.type, info.sizeInBytes, blockInfo.base, blockInfo.length);
     }
   }
 

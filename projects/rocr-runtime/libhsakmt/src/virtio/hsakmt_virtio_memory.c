@@ -489,10 +489,6 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtMapMemoryToGPUNodes(void* MemoryAddress, HSAuint6
   }
 
   if (!bo) {
-    /* ROCR-VMEM-DIAG: kernarg map fail root cause -- no BO registered for this gva. */
-    vhsa_err("%s: NOBO gva=%p size=0x%lx nodes=%lu use_svm=%d (-> AllowAccess OOM -> Code-2)\n",
-             __FUNCTION__, MemoryAddress, (unsigned long)MemorySizeInBytes,
-             (unsigned long)NumberOfNodes, dev->use_svm);
     free(req);
     return HSAKMT_STATUS_INVALID_HANDLE;
   }
@@ -507,12 +503,6 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtMapMemoryToGPUNodes(void* MemoryAddress, HSAuint6
 
   vhsakmt_execbuf_cpu(dev, &req->hdr, __FUNCTION__);
   if (rsp->ret) {
-    /* ROCR-VMEM-DIAG: this is the silent host-side MAP failure that surfaces as the
-       kernarg agents_allow_access failure -> hipStreamCreate Code-2 OOM (repo mem 2i). */
-    vhsa_err("%s: MAP_TO_GPU_NODES host ret=%d gva=%p hva=0x%lx size=0x%lx nodes=%lu use_svm=%d\n",
-             __FUNCTION__, rsp->ret, MemoryAddress,
-             (unsigned long)req->map_to_GPU_nodes_args.MemoryAddress,
-             (unsigned long)MemorySizeInBytes, (unsigned long)NumberOfNodes, dev->use_svm);
     free(req);
     return rsp->ret;
   }
@@ -946,16 +936,6 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtQueryPointerInfo(const void* Pointer, HsaPointerI
   vhsakmt_execbuf_cpu(dev, &req.hdr, __FUNCTION__);
 
   memcpy(PointerInfo, &rsp->ptr_info, sizeof(HsaPointerInfo));
-
-  if (PointerInfo->SizeInBytes == 0 || PointerInfo->GPUAddress == 0) {
-    /* ROCR-VMEM-DIAG: the HOST returned a degenerate ptr_info -- this is the deeper
-       root cause of the kernarg AllowAccess {0,0} block. Capture the host's answer. */
-    vhsa_err("%s: HOST-DEGEN gpu_va=%p Ptr=%p Type=%u Node=%u GPUAddress=0x%llx "
-             "CPUAddress=%p SizeInBytes=0x%llx rsp_ret=%d\n",
-             __FUNCTION__, gpu_va, Pointer, (unsigned)PointerInfo->Type, PointerInfo->Node,
-             (unsigned long long)PointerInfo->GPUAddress, PointerInfo->CPUAddress,
-             (unsigned long long)PointerInfo->SizeInBytes, rsp->ret);
-  }
 
   if (PointerInfo->NMappedNodes && PointerInfo->MappedNodes) {
     if (PointerInfo->NMappedNodes > QUERY_PTR_INFO_MAX_MAPPED_NODES) {
