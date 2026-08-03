@@ -4003,11 +4003,15 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
                               HSA_ACCESS_PERMISSION_NONE));
   addressHandle->use_count++;
   memoryHandle->use_count++;
+  { static const bool kVmemTrace = !os::GetEnvVar("ROCR_VMEM_TRACE").empty();
+    if (kVmemTrace) fprintf(stderr, "ROCR-MAP   va=%p size=0x%zx\n", va, size); }
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   std::lock_guard<std::shared_mutex> lock(memory_lock_);
+  { static const bool kVmemTrace = !os::GetEnvVar("ROCR_VMEM_TRACE").empty();
+    if (kVmemTrace) fprintf(stderr, "ROCR-UNMAP va=%p size=0x%zx\n", va, size); }
   std::list<std::pair<void*, MappedHandle*>> mappedHandles;
 
   // va + size may consist of multiple MappedHandle's.
@@ -4283,7 +4287,18 @@ hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
   while (va_chunk < reinterpret_cast<uint8_t*>(va) + size) {
     auto mappedHandleIt = mapped_handle_map_.find(va_chunk);
     // Cannot find a contiguous list of MappedHandles for the full VA range
-    if (mappedHandleIt == mapped_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    if (mappedHandleIt == mapped_handle_map_.end()) {
+      /* ROCR-VMEM-DIAG: 4099 root-cause probe (see repo memory 2i). */
+      const void* bkey = nullptr; size_t bsize = 0;
+      auto ub = mapped_handle_map_.upper_bound(va_chunk);
+      if (ub != mapped_handle_map_.begin()) { auto p = ub; --p; bkey = p->first; bsize = p->second.size; }
+      fprintf(stderr,
+              "ROCR-SETACC-FAIL va=%p size=0x%zx first_chunk=%p fail_chunk=%p mapcount=%zu "
+              "below_key=%p below_size=0x%zx below_end=0x%zx\n",
+              va, size, va, (void*)va_chunk, mapped_handle_map_.size(),
+              (void*)bkey, bsize, (size_t)bkey + bsize);
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    }
 
     mappedHandles.push_back(std::make_pair(va_chunk, &mappedHandleIt->second));
     va_chunk += mappedHandleIt->second.size;
