@@ -947,6 +947,16 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtQueryPointerInfo(const void* Pointer, HsaPointerI
 
   memcpy(PointerInfo, &rsp->ptr_info, sizeof(HsaPointerInfo));
 
+  if (PointerInfo->SizeInBytes == 0 || PointerInfo->GPUAddress == 0) {
+    /* ROCR-VMEM-DIAG: the HOST returned a degenerate ptr_info -- this is the deeper
+       root cause of the kernarg AllowAccess {0,0} block. Capture the host's answer. */
+    vhsa_err("%s: HOST-DEGEN gpu_va=%p Ptr=%p Type=%u Node=%u GPUAddress=0x%llx "
+             "CPUAddress=%p SizeInBytes=0x%llx rsp_ret=%d\n",
+             __FUNCTION__, gpu_va, Pointer, (unsigned)PointerInfo->Type, PointerInfo->Node,
+             (unsigned long long)PointerInfo->GPUAddress, PointerInfo->CPUAddress,
+             (unsigned long long)PointerInfo->SizeInBytes, rsp->ret);
+  }
+
   if (PointerInfo->NMappedNodes && PointerInfo->MappedNodes) {
     if (PointerInfo->NMappedNodes > QUERY_PTR_INFO_MAX_MAPPED_NODES) {
       PointerInfo->NMappedNodes = QUERY_PTR_INFO_MAX_MAPPED_NODES;
