@@ -503,6 +503,12 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtMapMemoryToGPUNodes(void* MemoryAddress, HSAuint6
 
   vhsakmt_execbuf_cpu(dev, &req->hdr, __FUNCTION__);
   if (rsp->ret) {
+    /* ROCR-VMEM-DIAG: this is the silent host-side MAP failure that surfaces as the
+       kernarg agents_allow_access failure -> hipStreamCreate Code-2 OOM (repo mem 2i). */
+    vhsa_err("%s: MAP_TO_GPU_NODES host ret=%d gva=%p hva=0x%lx size=0x%lx nodes=%lu use_svm=%d\n",
+             __FUNCTION__, rsp->ret, MemoryAddress,
+             (unsigned long)req->map_to_GPU_nodes_args.MemoryAddress,
+             (unsigned long)MemorySizeInBytes, (unsigned long)NumberOfNodes, dev->use_svm);
     free(req);
     return rsp->ret;
   }
