@@ -700,6 +700,13 @@ local:
     *;
 } hip_7.2;
 
+hip_7.15 {
+global:
+    hipMemGetDefaultMemPool;
+local:
+    *;
+} hip_7.14;
+
 hip_hrr {
 global:
     hipHrrCaptureActive;
@@ -707,4 +714,4 @@ global:
     hipHrrCaptureSubAllocTimeline;
 local:
     *;
-} hip_7.14;
+} hip_7.15;
