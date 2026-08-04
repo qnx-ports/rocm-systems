@@ -41,6 +41,10 @@ namespace {
   return RewriteDischarge::checked(check);
 }
 
+[[nodiscard]] constexpr RewriteDischarge block_checked_discharge(ResidualExpandFn check) {
+  return RewriteDischarge::checked(check, RewriteDischargeContext::BasicBlock);
+}
+
 [[nodiscard]] constexpr RewriteDischarge no_success_discharge(const char *rationale) {
   return RewriteDischarge::no_success(rationale);
 }
@@ -2515,10 +2519,10 @@ inline constexpr std::array<TranslationRule, 41> kGfx1250B0ToA0ExpandRules = {{
      expand_gfx1250_wmma_scale16, nullptr, nullptr, true, checked_discharge(scale16_residual)},
     {gfx1250::encoding::kVop3p, gfx1250::kVWmmaI3216x16x64Iu8Vop3p, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false,
-     checked_discharge(iu8_spacing_residual)},
+     block_checked_discharge(iu8_spacing_residual)},
     {gfx1250::encoding::kVop3p, gfx1250::kVSwmmacI3216x16x128Iu8Vop3p, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_wmma_iu8_spacing, nullptr, nullptr, false,
-     checked_discharge(iu8_spacing_residual)},
+     block_checked_discharge(iu8_spacing_residual)},
     {gfx1250::encoding::kVop3pOpHi1, gfx1250::kVWmmaF3216x16x128Fp8Fp8Vop3p, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_k128_wmma, nullptr, nullptr, false,
      checked_discharge(always_residual)},
@@ -2548,7 +2552,7 @@ inline constexpr std::array<TranslationRule, 41> kGfx1250B0ToA0ExpandRules = {{
      checked_discharge(always_residual)},
     {gfx1250::encoding::kVimage, gfx1250::kTensorLoadToLdsVimage, RuleAction::Expand, 0, 0, nullptr,
      expand_gfx1250_tensor_load_to_lds, nullptr, nullptr, true,
-     checked_discharge(tensor_load_residual)},
+     block_checked_discharge(tensor_load_residual)},
     {gfx1250::encoding::kVop3OpHi3, gfx1250::kVCvtF32Fp8Vop3, RuleAction::Expand, 0, 0, nullptr,
      expand_gfx1250_cvt_f32_fp8_e5m3, nullptr, nullptr, true,
      checked_discharge(cvt_f32_fp8_e5m3_residual)},
@@ -2588,25 +2592,25 @@ inline constexpr std::array<TranslationRule, 41> kGfx1250B0ToA0ExpandRules = {{
      expand_gfx1250_ds_addtid, nullptr, nullptr, true, checked_discharge(always_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB32Vglobal, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB64Vglobal, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadB128Vglobal, RuleAction::Expand, 0, 0,
      nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB8Vglobal, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB32Vglobal, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB64Vglobal, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
     {gfx1250::encoding::kVglobal, gfx1250::kClusterLoadAsyncToLdsB128Vglobal, RuleAction::Expand, 0,
      0, nullptr, expand_gfx1250_cluster_load, nullptr, nullptr, true,
-     checked_discharge(cluster_load_residual)},
+     block_checked_discharge(cluster_load_residual)},
 }};
 
 inline constexpr std::array<RegisteredInstructionRewrite, 1> kGfx1250B0ToA0InstructionRewriteRules =
