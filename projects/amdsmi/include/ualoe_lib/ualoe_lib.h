@@ -1369,4 +1369,42 @@ int ualoe_diag_config_prbs_rx(ualoe_handle_t handle, unsigned netport_idx, unsig
 int ualoe_diag_get_prbs_results(ualoe_handle_t handle, unsigned netport_idx, unsigned lane_idx,
                                 ualoe_prbs_results_t* results);
 
+/**
+ * @brief CPER severity levels (placeholder for future UALoE library update)
+ */
+typedef enum ualoe_cper_severity {
+  UALOE_CPER_SEV_NON_FATAL_UNCORRECTED = 0,
+  UALOE_CPER_SEV_FATAL = 1,
+  UALOE_CPER_SEV_NON_FATAL_CORRECTED = 2,
+  UALOE_CPER_SEV_NUM = 3,
+} ualoe_cper_severity_e;
+
+/**
+ * @brief CPER header structure (placeholder for future UALoE library update)
+ */
+typedef struct ualoe_cper_hdr_s {
+  struct timespec timestamp;
+  ualoe_cper_severity_e severity;
+  uint32_t record_length;
+} ualoe_cper_hdr_t;
+
+/**
+ * @brief Retrieve IFoE CPER entries (stub until UALoE library implements)
+ *
+ * This is a placeholder stub that will be replaced when the UALoE library
+ * is updated with actual CPER support. Currently returns 0 entries.
+ *
+ * @param handle UALoE driver handle
+ * @param severity_mask Bitmask of severity levels
+ * @param cper_data Buffer for CPER data
+ * @param buf_size Buffer size (in/out)
+ * @param cper_hdrs Array of CPER header pointers (out)
+ * @param entry_count Number of entries (in/out)
+ * @param cursor Pagination cursor (in/out)
+ * @return 0 on success, errno on failure
+ */
+int ualoe_get_ifoe_cper_entries(ualoe_handle_t handle, uint32_t severity_mask, char* cper_data,
+                                uint64_t* buf_size, ualoe_cper_hdr_t** cper_hdrs,
+                                uint64_t* entry_count, uint64_t* cursor);
+
 #endif  // UALOE_LIB_H

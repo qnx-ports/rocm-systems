@@ -35,24 +35,6 @@ extern "C" {
 #include <time.h>
 
 #include "ualoe_lib/ualoe_lib.h"
-
-// Forward declarations for UALoE CPER types (will be defined in future UALoE library update)
-typedef enum ualoe_cper_severity {
-  UALOE_CPER_SEV_NON_FATAL_UNCORRECTED = 0,
-  UALOE_CPER_SEV_FATAL = 1,
-  UALOE_CPER_SEV_NON_FATAL_CORRECTED = 2,
-  UALOE_CPER_SEV_NUM = 3,
-} ualoe_cper_severity_e;
-
-typedef struct ualoe_cper_hdr_s {
-  struct timespec timestamp;
-  ualoe_cper_severity_e severity;
-  uint32_t record_length;
-} ualoe_cper_hdr_t;
-
-int ualoe_get_ifoe_cper_entries(ualoe_handle_t handle, uint32_t severity_mask, char* cper_data,
-                                uint64_t* buf_size, ualoe_cper_hdr_t** cper_hdrs,
-                                uint64_t* entry_count, uint64_t* cursor);
 }
 
 #include <algorithm>

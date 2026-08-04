@@ -842,3 +842,21 @@ int ualoe_diag_get_prbs_results(ualoe_handle_t handle, unsigned netport_idx, uns
                                 ualoe_prbs_results_t* results) {
   return EOPNOTSUPP;
 }
+
+// Stub implementation for ualoe_get_ifoe_cper_entries
+// This will be replaced when the UALoE library is updated with CPER support
+int ualoe_get_ifoe_cper_entries(ualoe_handle_t handle, uint32_t severity_mask, char* cper_data,
+                                uint64_t* buf_size, ualoe_cper_hdr_t** cper_hdrs,
+                                uint64_t* entry_count, uint64_t* cursor) {
+  (void)handle;
+  (void)severity_mask;
+  (void)cper_data;
+  (void)cper_hdrs;
+  (void)cursor;
+
+  // Return no entries until UALoE library implements this function
+  if (buf_size) *buf_size = 0;
+  if (entry_count) *entry_count = 0;
+
+  return 0;  // Success with 0 entries
+}
