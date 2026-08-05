@@ -7,6 +7,7 @@ from pathlib import Path
 
 import common
 import pandas as pd
+import pytest
 
 from utils.rocpd_data import (
     COUNTERS_COLLECTION_QUERY,
@@ -18,7 +19,10 @@ from utils.utils_analysis import (
     process_ml_api_trace_output,
     write_ml_api_trace_consolidated_csv,
 )
-from utils.utils_profile import _augment_marker_csv, _parse_function_backend
+from utils.utils_profile import (
+    _augment_marker_csv,
+    _parse_function_fields,
+)
 
 GUID = "abc-1234-def"
 
@@ -423,48 +427,82 @@ def test_ml_api_trace_output_same_for_rocpd_and_csv():
     common.clean_output_dir(True, csv_dir)
 
 
-# ---- Backend column unpacking in save_ml_api_trace_inputs ----
+# ---- Function cell parsing in save_ml_api_trace_inputs ----
 
 
-def test_parse_function_backend_untagged_is_unknown():
-    """Untagged rows surface as Backend='unknown'."""
-    clean, backend = _parse_function_backend("torch.empty:#1@linear.py:109")
-    assert clean == "torch.empty:#1@linear.py:109"
-    assert backend == "unknown"
+@pytest.mark.parametrize(
+    "raw, expect_function, expect_backend, expect_args",
+    [
+        ("aten::add", "aten::add", "unknown", ""),
+        ("aten::mm|torch", "aten::mm", "torch", ""),
+        (
+            "aten::mm:#1@m.py:7|args=(f32[2x2])|torch",
+            "aten::mm:#1@m.py:7",
+            "torch",
+            "(f32[2x2])",
+        ),
+        (
+            "triton.k:#1@m.py:7|args=(x_ptr=f32[8], n=1024)|triton",
+            "triton.k:#1@m.py:7",
+            "triton",
+            "(x_ptr=f32[8], n=1024)",
+        ),
+        (
+            "aten::cat:#1@m.py:7|args=a%7Cb|torch",
+            "aten::cat:#1@m.py:7",
+            "torch",
+            "a|b",
+        ),
+        (
+            "aten::mm:#1@m.py:7|args=(self=f32[2x2])%3Bextra|torch",
+            "aten::mm:#1@m.py:7",
+            "torch",
+            "(self=f32[2x2]);extra",
+        ),
+        (
+            "torch.compile.fn/triton.CompiledKernel.foo:#1@a.py:1/#1@b.py:2|triton",
+            "torch.compile.fn/triton.CompiledKernel.foo:#1@a.py:1/#1@b.py:2",
+            "triton",
+            "",
+        ),
+        ("op|bogus", "op|bogus", "unknown", ""),
+        ("", "", "unknown", ""),
+        (None, "", "unknown", ""),
+    ],
+)
+def test_parse_function_fields_splits_args(
+    raw, expect_function, expect_backend, expect_args
+):
+    """The args segment is split out and decoded; unrecognized values fall back
+    to backend 'unknown'."""
+    fn, backend, args = _parse_function_fields(raw)
+    assert fn == expect_function
+    assert backend == expect_backend
+    assert args == expect_args
 
 
-def test_parse_function_backend_tagged_torch_is_stripped():
-    """Tagged single-frame markers expose backend and lose the suffix."""
-    clean, backend = _parse_function_backend(
-        "nn.Module.MyModel.forward:#1@train.py:42|torch"
-    )
-    assert clean == "nn.Module.MyModel.forward:#1@train.py:42"
-    assert backend == "torch"
+def test_augment_marker_csv_splits_args_into_dedicated_column(tmp_path):
+    """The wire args segment is moved into a dedicated Args column."""
+    src = tmp_path / "src_marker_api_trace.csv"
+    dst = tmp_path / "ml_api_trace_dst_marker_api_trace.csv"
+    pd.DataFrame({
+        "Function": [
+            "aten::mm:#1@m.py:7|args=(f32[2x2])|torch",
+            "aten::relu:#2@m.py:8|torch",
+        ],
+        "Start": [1, 2],
+    }).to_csv(src, index=False)
 
+    _augment_marker_csv(str(src), str(dst))
 
-def test_parse_function_backend_tagged_triton_leaf():
-    """Row-level suffix attributes the entire wire to its producing backend."""
-    clean, backend = _parse_function_backend(
-        "torch.compile.fn/triton.CompiledKernel.foo:#1@a.py:1/#1@b.py:2|triton"
-    )
-    assert clean == ("torch.compile.fn/triton.CompiledKernel.foo:#1@a.py:1/#1@b.py:2")
-    assert backend == "triton"
-
-
-def test_parse_function_backend_aten_leaf_is_unknown():
-    """Untagged ATen leaf surfaces as Backend='unknown'."""
-    clean, backend = _parse_function_backend(
-        "nn.Module.X.forward/aten::add:#1@m.py:9/#1@aten:0"
-    )
-    assert clean == "nn.Module.X.forward/aten::add:#1@m.py:9/#1@aten:0"
-    assert backend == "unknown"
-
-
-def test_parse_function_backend_edge_cases():
-    """Bogus suffix, empty string, and None all fall back to 'unknown'."""
-    assert _parse_function_backend("op|bogus") == ("op|bogus", "unknown")
-    assert _parse_function_backend("") == ("", "unknown")
-    assert _parse_function_backend(None) == ("", "unknown")
+    out_df = pd.read_csv(dst, keep_default_na=False)
+    assert "Args" in out_df.columns
+    assert out_df["Function"].tolist() == [
+        "aten::mm:#1@m.py:7",
+        "aten::relu:#2@m.py:8",
+    ]
+    assert out_df["Args"].tolist() == ["(f32[2x2])", ""]
+    assert out_df["Backend"].tolist() == ["torch", "torch"]
 
 
 def test_augment_marker_csv_untagged_row_warns(tmp_path, monkeypatch):
@@ -563,3 +601,40 @@ def test_process_ml_api_trace_output_preserves_per_row_backend(tmp_path):
     )
     assert backend_by_operator.get("torch.mm") == "triton"
     assert backend_by_operator.get("nn.Module.Linear.forward") == "torch"
+
+
+def test_process_ml_api_trace_output_defaults_args_to_empty(tmp_path):
+    """A marker CSV without an Args column yields an empty Args column."""
+    workload_dir = str(tmp_path)
+    write_rocpd_layout(workload_dir)
+
+    consolidated_df, _ = process_ml_api_trace_output(workload_dir)
+
+    assert "Args" in consolidated_df.columns
+    assert (consolidated_df["Args"] == "").all()
+
+
+def test_process_ml_api_trace_output_preserves_per_row_args(tmp_path):
+    """A tagged marker CSV surfaces its per-row Args value into the
+    consolidated dataframe.
+    """
+    workload_dir = str(tmp_path)
+    write_rocpd_layout(workload_dir)
+
+    marker_path = Path(workload_dir) / "ml_api_trace_run0_marker_api_trace.csv"
+    df = pd.read_csv(marker_path)
+    df["Args"] = [
+        "(input=float32[2x2])",
+        "(input=float32[2x2])",
+        "(self=float32[2x2])",
+    ]
+    df.to_csv(marker_path, index=False)
+
+    consolidated_df, _ = process_ml_api_trace_output(workload_dir)
+
+    assert "Args" in consolidated_df.columns
+    args_by_operator = dict(
+        zip(consolidated_df["Operator_Name"], consolidated_df["Args"])
+    )
+    assert args_by_operator.get("torch.mm") == "(self=float32[2x2])"
+    assert args_by_operator.get("nn.Module.Linear.forward") == "(input=float32[2x2])"

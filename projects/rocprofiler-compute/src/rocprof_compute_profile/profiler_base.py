@@ -77,6 +77,20 @@ def _find_python_script_index(argv: list[str]) -> tuple[Optional[int], Optional[
     return None, None
 
 
+def _capture_args_flags(capture_args_level: str) -> list[str]:
+    """Map a ``--ml-trace-with-params`` level to the launcher
+    ``--capture-args`` / ``--capture-arg-values`` flags.
+    """
+    capture_args = "0" if capture_args_level == "off" else "1"
+    capture_arg_values = "1" if capture_args_level == "values" else "0"
+    return [
+        "--capture-args",
+        capture_args,
+        "--capture-arg-values",
+        capture_arg_values,
+    ]
+
+
 def _prepare_ml_api_trace_injection(
     remaining: list[str],
     resolved_exec_path: Path,
@@ -84,13 +98,15 @@ def _prepare_ml_api_trace_injection(
     script_index: Optional[int],
     skip_flag: Optional[str],
     frameworks: set[str],
+    capture_args_level: str = "shapes",
 ) -> None:
     """Insert the inject_roctx launcher into the workload command.
 
     Modifies the ``remaining`` command list in place. The launcher is run by
     absolute path, with the selected frameworks passed as ``--frameworks
-    <names>`` followed by ``--`` and the workload command. The rewrite depends
-    on the workload type:
+    <names>``, the operator-args capture level passed as ``--capture-args`` /
+    ``--capture-arg-values``, followed by ``--`` and the workload command. The
+    rewrite depends on the workload type:
       1. Python interpreter — insert the launcher before the script.
       2. Direct .py script  — prepend ``sys.executable`` and the launcher.
       3. Other executables  — leave the command unchanged and emit a warning.
@@ -108,6 +124,7 @@ def _prepare_ml_api_trace_injection(
         str(launch_script),
         "--frameworks",
         ",".join(sorted(frameworks)),
+        *_capture_args_flags(capture_args_level),
         "--",
     ]
 
@@ -173,6 +190,16 @@ class RocProfCompute_Base:
                 "collect counters. Remove the tracing option(s) or add a counter block."
             )
         self._selected_frameworks: set[str] = selected_frameworks
+
+        # --ml-trace-with-params only has meaning alongside a tracing flag.
+        if getattr(args, "ml_trace_with_params", None) is not None and (
+            not selected_frameworks
+        ):
+            console_warning(
+                "--ml-trace-with-params requires a tracing flag "
+                "(--torch-trace, --triton-trace, or --ml-api-trace); "
+                "ignoring it."
+            )
 
         if (
             sum((
@@ -268,6 +295,7 @@ class RocProfCompute_Base:
                     script_index,
                     skip_flag,
                     selected_frameworks,
+                    getattr(args, "ml_trace_with_params", None) or "shapes",
                 )
             args.remaining = shlex.join(args.remaining)
         elif not args.attach_pid:

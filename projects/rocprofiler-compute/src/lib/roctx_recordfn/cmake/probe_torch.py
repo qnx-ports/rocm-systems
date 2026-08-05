@@ -38,7 +38,7 @@ def main() -> int:
     # (dev) or `libexec/<project>` (installed); both host the utils package.
     src_root = pathlib.Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(src_root))
-    from utils.inject_roctx._backends.torch_cpp_loader import _source_fingerprint
+    from utils.inject_roctx.backends.torch_cpp_loader import _source_fingerprint
 
     wheel_lib_dir = str(pathlib.Path(torch.__file__).parent / "lib")
 

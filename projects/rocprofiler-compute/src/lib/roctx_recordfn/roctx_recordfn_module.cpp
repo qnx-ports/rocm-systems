@@ -44,7 +44,11 @@ PYBIND11_MODULE(roctx_recordfn, m)
 
     m.doc() = "ROCTX bridge for PyTorch's RecordFunction callback.";
 
-    m.def("install", &install, "Install the global RecordFunction callback. Idempotent.");
+    m.def("install",
+          &install,
+          "Install the global RecordFunction callback. Idempotent.",
+          pybind11::arg("capture_args")   = true,
+          pybind11::arg("capture_values") = false);
     m.def("uninstall", &uninstall, "Remove the registered callback.");
     m.def("is_installed", &is_installed, "Return True if the callback is installed.");
     m.def("push_user_scope",
@@ -52,6 +56,7 @@ PYBIND11_MODULE(roctx_recordfn, m)
           pybind11::arg("marker"),
           pybind11::arg("context"),
           pybind11::arg("backend") = std::string(""),
+          pybind11::arg("args")    = std::string(""),
           "Push a USER_SCOPE frame, emit a ROCTX range, publish chain into TLS DebugInfo.");
     m.def("pop_user_scope", &pop_user_scope, "Pop the most recent push_user_scope() frame on this thread.");
     m.def("dump_stats", &dump_stats, "Internal counters for tests/debugging.");
