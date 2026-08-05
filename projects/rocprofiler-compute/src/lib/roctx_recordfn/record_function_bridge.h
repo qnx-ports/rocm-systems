@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "args_capture.h"
 #include "capture_buffer.h"
 #include "install_state.h"
 #include "leaf_context.h"
@@ -121,6 +122,7 @@ inline std::unique_ptr<at::ObserverContext> start_cb(const at::RecordFunction& r
 
         // Emit the ROCTX range. RecordFunction ops are torch-backed.
         std::string wire_string = build_marker_string(g_thread.stack);
+        append_args_segment(wire_string, build_leaf_args(record_fn));
         wire_string += '|';
         wire_string += kRecordFnBackend;
         roctxRangePushA(wire_string.c_str());
@@ -155,17 +157,25 @@ inline void end_cb(const at::RecordFunction& /*record_fn*/, at::ObserverContext*
     }
 }
 
-inline std::int64_t install()
+inline std::int64_t install(bool capture_args = true, bool capture_values = false)
 {
     std::lock_guard<std::mutex> lock(g_install.mutex);
-    const auto                  existing = g_install.handle.load();
+    g_args_capture.capture_args.store(capture_args);
+    g_args_capture.capture_values.store(capture_values);
+    const auto existing = g_install.handle.load();
     if (existing != at::INVALID_CALLBACK_HANDLE)
     {
+        // needsInputs is fixed when the callback is registered and cannot be
+        // changed in place; call uninstall() before install() to change it.
         return static_cast<std::int64_t>(existing);
     }
-    const auto handle = at::addGlobalCallback(
-        at::RecordFunctionCallback(start_cb, end_cb)
-            .scopes({at::RecordScope::FUNCTION, at::RecordScope::BACKWARD_FUNCTION}));
+    auto callback = at::RecordFunctionCallback(start_cb, end_cb)
+                        .scopes({at::RecordScope::FUNCTION, at::RecordScope::BACKWARD_FUNCTION});
+    if (capture_args)
+    {
+        callback.needsInputs(true);
+    }
+    const auto handle = at::addGlobalCallback(callback);
     g_install.handle.store(handle);
     g_install.installed.store(true);
     return static_cast<std::int64_t>(handle);

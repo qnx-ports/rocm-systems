@@ -5,7 +5,7 @@
 ## module for --torch-trace. Configured in two modes:
 ##   A. parent add_subdirectory() under ENABLE_TESTS (CI fixture + gtest).
 ##   B. standalone, driven at runtime by
-##      utils/inject_roctx/_backends/torch_cpp_loader.py (JIT build).
+##      utils/inject_roctx/backends/torch_cpp_loader.py (JIT build).
 set(_rcfn_standalone OFF)
 if(NOT PROJECT_NAME)
     cmake_minimum_required(VERSION 3.16)
