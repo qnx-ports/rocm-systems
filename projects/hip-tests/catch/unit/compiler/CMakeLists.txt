@@ -30,7 +30,8 @@ if(HIP_PLATFORM MATCHES "amd")
     --offload-arch=gfx10-1-generic
     --offload-arch=gfx10-3-generic
     --offload-arch=gfx11-generic
-    --offload-arch=gfx12-generic)
+    --offload-arch=gfx12-generic
+    --offload-arch=gfx12-5-generic)
 
   set(DISABLE_GENERIC_TARGET_ONLY)
 
