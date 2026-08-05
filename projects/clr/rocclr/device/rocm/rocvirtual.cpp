@@ -2188,7 +2188,6 @@ VirtualGPU::VirtualGPU(Device& device, bool profiling, bool cooperative,
                        const std::vector<uint32_t>& cuMask, amd::CommandQueue::Priority priority,
                        bool dedicated_queue)
     : device::VirtualDevice(device),
-      state_(0),
       gpu_queue_(nullptr),
       roc_device_(device),
       virtualQueue_(nullptr),

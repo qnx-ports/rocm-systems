@@ -407,7 +407,12 @@ bool Device::init() {
   }
 
   bool vmem_supported = false;
+#ifdef HSA_AMD_SYSTEM_INFO_HOST_ALLOC_DMA_BUF_SUPPORTED
   Hsa::system_get_info(HSA_AMD_SYSTEM_INFO_HOST_ALLOC_DMA_BUF_SUPPORTED, &vmem_supported);
+#else
+  // Fallback for older HSA headers: use agent query instead of system query
+  vmem_supported = false;
+#endif
   hostVmemSupported_ = !cpu_agents_.empty() && vmem_supported;
 
   std::string ordinals =

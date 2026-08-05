@@ -845,19 +845,15 @@ class VirtualGPU : public device::VirtualDevice {
     } while (true);
   }
 
-  //! Queue state flags
-  union {
-    struct {
-      uint32_t hasPendingDispatch_ : 1;     //!< A kernel dispatch is outstanding
-      uint32_t profiling_ : 1;              //!< Profiling is enabled
-      uint32_t cooperative_ : 1;            //!< Cooperative launch is enabled
-      uint32_t addSystemScope_ : 1;         //!< Insert a system scope to the next aql
-      uint32_t tracking_created_ : 1;       //!< Enabled if tracking object was properly initialized
-      uint32_t retainExternalSignals_ : 1;  //!< Indicate to retain external signal array
-      uint32_t force_irq_ : 1;              //!< Forces interrupt on the signal completion
-    };
-    uint32_t state_;
-  };
+  //! Queue state flags — individual bools instead of a bitfield union to avoid
+  //! data races between threads accessing different flags in the same word.
+  bool hasPendingDispatch_ = false;
+  bool profiling_ = false;
+  bool cooperative_ = false;
+  bool addSystemScope_ = false;
+  bool tracking_created_ = false;
+  bool retainExternalSignals_ = false;
+  bool force_irq_ = false;
 
   Timestamp* timestamp_;
   bool sdma_profiling_for_cmd_ = false;  //!< SDMA profiling enabled for current command
