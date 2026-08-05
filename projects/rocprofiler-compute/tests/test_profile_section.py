@@ -7,7 +7,6 @@ import inspect
 from pathlib import Path
 
 import common
-import pytest
 from profile_helpers import (
     config,
     is_gfx115x_soc,
@@ -17,7 +16,6 @@ from profile_helpers import (
 )
 
 
-@pytest.mark.section
 def test_lds_section(binary_handler_profile_rocprof_compute):
     lds_block = "3" if is_gfx115x_soc() else ("9" if is_gfx1250_soc() else "12")
     options = ["--block", lds_block]
@@ -42,7 +40,6 @@ def test_lds_section(binary_handler_profile_rocprof_compute):
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_instmix_memchart_section(binary_handler_profile_rocprof_compute):
     rdna_or_gfx1250 = is_gfx115x_soc() or is_gfx1250_soc()
     instmix_block = "7" if rdna_or_gfx1250 else "10"
@@ -76,7 +73,6 @@ def test_instmix_memchart_section(binary_handler_profile_rocprof_compute):
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_lds_sol_section(binary_handler_profile_rocprof_compute):
     lds_sol_block = "3" if is_gfx115x_soc() else ("9.4" if is_gfx1250_soc() else "12.1")
     options = ["--block", lds_sol_block]
@@ -108,7 +104,6 @@ def test_lds_sol_section(binary_handler_profile_rocprof_compute):
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_instmix_section_global_write_kernel(binary_handler_profile_rocprof_compute):
     rdna_or_gfx1250 = is_gfx115x_soc() or is_gfx1250_soc()
     instmix_block = "7" if rdna_or_gfx1250 else "10"
@@ -148,7 +143,6 @@ def test_instmix_section_global_write_kernel(binary_handler_profile_rocprof_comp
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_list_metrics(binary_handler_profile_rocprof_compute):
     options = ["--list-metrics", "gfx90a"]
     workload_dir = common.get_output_dir()
@@ -160,7 +154,6 @@ def test_list_metrics(binary_handler_profile_rocprof_compute):
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_list_metrics_with_block(binary_handler_profile_rocprof_compute):
     options = ["--list-metrics", "gfx90a", "--block", "10"]
     workload_dir = common.get_output_dir()
@@ -174,7 +167,6 @@ def test_list_metrics_with_block(binary_handler_profile_rocprof_compute):
     common.clean_output_dir(config["cleanup"], workload_dir)
 
 
-@pytest.mark.section
 def test_list_available_metrics(binary_handler_profile_rocprof_compute, capsys):
     options = ["--list-available-metrics"]
     workload_dir = common.get_output_dir()
@@ -191,7 +183,6 @@ def test_list_available_metrics(binary_handler_profile_rocprof_compute, capsys):
     assert "1 -> System Info" in output
 
 
-@pytest.mark.section
 def test_list_available_metrics_with_block(
     binary_handler_profile_rocprof_compute, capsys
 ):
