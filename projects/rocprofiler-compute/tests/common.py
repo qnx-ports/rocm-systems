@@ -20,6 +20,7 @@ SRC = src_candidate if os.path.isdir(src_candidate) else ROOT
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
+
 SUPPORTED_ARCHS = {
     "gfx908": {"mi100": ["MI100"]},
     "gfx90a": {"mi200": ["MI210", "MI250", "MI250X"]},
@@ -233,11 +234,6 @@ def get_num_pmc_file(output_dir):
         for f in perfmon_path.iterdir()
         if f.is_file() and f.name.startswith("pmc_perf_") and f.suffix == ".yaml"
     ])
-
-
-def strip_ansi(s: str) -> str:
-    ansi_escape = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
-    return ansi_escape.sub("", s)
 
 
 def _tee(pipe, sink, out) -> None:
