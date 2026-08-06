@@ -169,8 +169,9 @@ def _print_mem_chart_scope_bar(console: Console) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Diagram construction: _extract_metrics, _build_kernel_and_l0,
-#   _build_cache_columns, _build_memory_columns, create_mem_chart_diagram
+# Diagram construction: _extract_metrics, _build_gfx11_bw_edge_column,
+#   _build_kernel_edges, _build_l0_stack, _build_gl1_edges, _build_gl1_panel,
+#   _build_gl2_panel, _build_gcea_panel, _build_dram_panel, create_mem_chart_diagram
 # ---------------------------------------------------------------------------
 
 
