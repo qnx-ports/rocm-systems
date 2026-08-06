@@ -98,12 +98,13 @@ public:
                                   std::span<const PcRelativeTextRelocation> code_relocations = {},
                                   bool require_every_text_symbol_mapped = false);
 
-  /// @brief True if any relocation's place (r_offset) falls inside .text.
+  /// @brief True if any non-inert relocation's place (r_offset) falls inside .text.
   ///
   /// @details DBT compacts/expands/moves instructions within .text but does not
   /// remap relocation places that land in .text — replace_text() only shifts
   /// relocation offsets for whole sections moved *after* .text. An in-.text
   /// relocation would therefore be applied to the wrong translated bytes.
+  /// R_AMDGPU_NONE is inert and has no relocation place to preserve.
   /// BinaryTranslator uses this to fail closed instead of miscompiling. Real
   /// AMDHSA kernel code objects carry no such relocations, so this rejects only
   /// genuinely unsupported inputs.
