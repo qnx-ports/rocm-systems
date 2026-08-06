@@ -132,10 +132,10 @@ Panel Config:
         Fabric_L2 Atomic:
           value: ROUND(SUM(TCC_EA0_ATOMIC_sum) / SUM($denom), 0)
         L2-Fabric Read BW:
-          value: SUM(TCC_EA0_RDREQ_32B_sum * 32 + TCC_EA0_RDREQ_64B_sum * 64 + TCC_EA0_RDREQ_128B_sum * 128) / SUM(End_Timestamp - Start_Timestamp)
+          value: SUM(TCC_EA0_RDREQ_32B_sum * 32 + TCC_EA0_RDREQ_64B_sum * 64 + TCC_EA0_RDREQ_128B_sum * 128) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         L2-Fabric Write and Atomic BW:
-          value: SUM(TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32) / SUM(End_Timestamp - Start_Timestamp)
+          value: SUM(TCC_EA0_WRREQ_64B_sum * 64 + (TCC_EA0_WRREQ_sum - TCC_EA0_WRREQ_64B_sum) * 32) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         Fabric Rd Lat:
           value: ROUND(SUM(TCC_EA0_RDREQ_LEVEL_sum) / SUM(TCC_EA0_RDREQ_sum), 0)
@@ -148,31 +148,31 @@ Panel Config:
         HBM Wr:
           value: ROUND(SUM(TCC_EA0_WRREQ_DRAM_sum) / SUM($denom), 0)
         HBM Read BW:
-          value: 32 * SUM(TCC_EA0_RDREQ_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_RDREQ_DRAM_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         HBM Write BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_DRAM_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         HBM Atomic BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_DRAM_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_DRAM_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         xGMI Read BW:
-          value: 32 * SUM(TCC_EA0_RDREQ_GMI_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_RDREQ_GMI_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         xGMI Write BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_GMI_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_GMI_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         xGMI Atomic BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_GMI_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_GMI_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         PCIe Read BW:
-          value: 32 * SUM(TCC_EA0_RDREQ_IO_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_RDREQ_IO_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         PCIe Write BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_IO_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_WRITE_IO_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
         PCIe Atomic BW:
-          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_IO_32B_sum) / SUM(End_Timestamp - Start_Timestamp)
+          value: 32 * SUM(TCC_EA0_WRREQ_ATOMIC_IO_32B_sum) / (SUM(End_Timestamp - Start_Timestamp) / 1e9)
           unit: Bytes/s
       comparable: false
       cli_style: mem_chart
