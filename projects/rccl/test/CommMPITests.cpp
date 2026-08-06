@@ -13,6 +13,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 using namespace MPITestConstants;
 using namespace RCCLTestGuards;
@@ -164,6 +165,335 @@ TEST_F(PatLazyInitMPITest, DefersConnectionUntilFirstCollective)
     ASSERT_MPI_TRUE(comm->initAlgoChannels[NCCL_ALGO_PAT]);
     const std::string collective_log = log_ctx.readNcclDebugLog();
     ASSERT_MPI_TRUE(collective_log.find("Connected binomial trees") != std::string::npos);
+}
+
+// The environment every PAT test below needs, bundled so each test spends one line on it.
+// Hierarchical AllGather has to be off or it intercepts ncclAllGather before PAT sees it, which
+// would let a PAT test pass without ever running PAT.
+struct PatTestEnv
+{
+    MPIHelpers::MpiEnvGuard pat_enable{"NCCL_PAT_ENABLE", "1"};
+    MPIHelpers::MpiEnvGuard pat_lazy{"NCCL_PAT_LAZY_INIT", "1"};
+    MPIHelpers::MpiEnvGuard algorithm{"NCCL_ALGO", "PAT"};
+    MPIHelpers::MpiEnvGuard protocol{"NCCL_PROTO", "SIMPLE"};
+    MPIHelpers::MpiEnvGuard cumem{"NCCL_CUMEM_ENABLE", "0"};
+    MPIHelpers::MpiEnvGuard hag{"RCCL_HIERARCHICAL_ALLGATHER", "0"};
+};
+
+class PatSharedConnectionMPITest : public MPITestBase
+{
+protected:
+    // Returns the decision rather than skipping here, because GTEST_SKIP() in a helper does not
+    // stop the calling test.
+    bool oneRankPerNode()
+    {
+        MPI_Comm local_comm;
+        if(MPI_Comm_split_type(
+               MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm) != MPI_SUCCESS)
+        {
+            return false;
+        }
+        int local_size = 0;
+        MPI_Comm_size(local_comm, &local_size);
+        MPI_Comm_free(&local_comm);
+        return local_size == 1;
+    }
+};
+
+/**
+ * ReduceScatter and AllGather address the same binomial neighbors, so PAT builds one
+ * connection per neighbor and direction instead of a mirrored pair. Lazy init defers that
+ * work to the first PAT collective, which lets the test separate the PAT connections from
+ * the ring and tree connections already established during ncclCommInitRank.
+ *
+ * Below four ranks the mask set is closed under mask -> nranks-mask, so both connect passes
+ * target the same peers and there is nothing to distinguish.
+ *
+ * RCCL_PARAM caches into a process-lifetime static, so the first communicator built in this
+ * binary fixes RCCL_PAT_SHARED_QPS for every later one. This test therefore skips rather than
+ * fails when the kill switch was set before launch, and its counterpart below does the reverse.
+ */
+TEST_F(PatSharedConnectionMPITest, AllGatherReusesReduceScatterConnections)
+{
+    ASSERT_MPI_TRUE(validateTestPrerequisites(/*min_processes=*/4));
+
+    if(!oneRankPerNode())
+    {
+        GTEST_SKIP() << "PAT requires exactly one MPI rank per node";
+    }
+
+    PatTestEnv env;
+
+    ASSERT_MPI_EQ(ncclSuccess, createTestCommunicator());
+
+    ncclComm_t comm = getActiveCommunicator();
+    ASSERT_MPI_TRUE(comm != nullptr);
+    if(!comm->patSharedQps)
+    {
+        GTEST_SKIP() << "RCCL_PAT_SHARED_QPS is disabled for this process, so PAT builds the "
+                        "mirrored connection set; run without it to exercise sharing";
+    }
+    ASSERT_MPI_FALSE(comm->initAlgoChannels[NCCL_ALGO_PAT]);
+
+    const int rank = comm->rank;
+    const int nranks = comm->nRanks;
+    const int nchannels = comm->nChannels;
+
+    std::vector<int> send_before(static_cast<size_t>(nchannels) * nranks, 0);
+    std::vector<int> recv_before(static_cast<size_t>(nchannels) * nranks, 0);
+    for(int channel = 0; channel < nchannels; ++channel)
+    {
+        for(int peer = 0; peer < nranks; ++peer)
+        {
+            const size_t index = static_cast<size_t>(channel) * nranks + peer;
+            send_before[index] = comm->channels[channel].peers[peer]->send[0].connected;
+            recv_before[index] = comm->channels[channel].peers[peer]->recv[0].connected;
+        }
+    }
+
+    void* send_buffer = nullptr;
+    void* recv_buffer = nullptr;
+    ASSERT_MPI_EQ(hipSuccess, hipMalloc(&send_buffer, sizeof(uint8_t)));
+    auto send_guard = makeDeviceBufferAutoGuard(send_buffer);
+    ASSERT_MPI_EQ(hipSuccess,
+                  hipMalloc(&recv_buffer, sizeof(uint8_t) * MPIEnvironment::world_size));
+    auto recv_guard = makeDeviceBufferAutoGuard(recv_buffer);
+
+    ASSERT_MPI_EQ(ncclSuccess,
+                  ncclAllGather(send_buffer,
+                                recv_buffer,
+                                1,
+                                ncclUint8,
+                                comm,
+                                getActiveStream()));
+    ASSERT_MPI_EQ(hipSuccess, hipStreamSynchronize(getActiveStream()));
+
+    ASSERT_MPI_TRUE(comm->initAlgoChannels[NCCL_ALGO_PAT]);
+
+    // The connections PAT is allowed to add, i.e. ReduceScatter's directions. The two-pass
+    // connect also built the mirror of every entry, which is what this test rules out.
+    std::vector<char> expect_recv(nranks, 0);
+    std::vector<char> expect_send(nranks, 0);
+    for(int mask = 1; mask < nranks; mask <<= 1)
+    {
+        expect_recv[(rank - mask + nranks) % nranks] = 1;
+        expect_send[(rank + mask) % nranks] = 1;
+    }
+
+    for(int channel = 0; channel < nchannels; ++channel)
+    {
+        for(int peer = 0; peer < nranks; ++peer)
+        {
+            const size_t index = static_cast<size_t>(channel) * nranks + peer;
+            const int recv_now = comm->channels[channel].peers[peer]->recv[0].connected;
+            const int send_now = comm->channels[channel].peers[peer]->send[0].connected;
+
+            if(expect_recv[peer])
+            {
+                ASSERT_MPI_TRUE(recv_now);
+            }
+            else
+            {
+                ASSERT_MPI_EQ(recv_before[index], recv_now);
+            }
+
+            if(expect_send[peer])
+            {
+                ASSERT_MPI_TRUE(send_now);
+            }
+            else
+            {
+                ASSERT_MPI_EQ(send_before[index], send_now);
+            }
+        }
+    }
+}
+
+/**
+ * RCCL_PAT_SHARED_QPS=0 restores the mirrored connection set AllGather used before sharing.
+ * Asserting the mirror is present keeps that fallback path from decaying unnoticed, and the
+ * AllGather payload check covers the device primitives and PatAGAlgorithm still agreeing with
+ * the proxy on peer direction when sharing is off.
+ *
+ * The MpiEnvGuard below only takes effect when this test builds the first communicator in the
+ * process, because RCCL_PARAM caches. Launch with RCCL_PAT_SHARED_QPS=0 already in the
+ * environment to run it alongside other communicator tests; otherwise it skips.
+ */
+TEST_F(PatSharedConnectionMPITest, SeparateConnectionsWhenSharingDisabled)
+{
+    ASSERT_MPI_TRUE(validateTestPrerequisites(/*min_processes=*/4));
+
+    if(!oneRankPerNode())
+    {
+        GTEST_SKIP() << "PAT requires exactly one MPI rank per node";
+    }
+
+    PatTestEnv              env;
+    MPIHelpers::MpiEnvGuard pat_shared("RCCL_PAT_SHARED_QPS", "0");
+
+    ASSERT_MPI_EQ(ncclSuccess, createTestCommunicator());
+
+    ncclComm_t comm = getActiveCommunicator();
+    ASSERT_MPI_TRUE(comm != nullptr);
+    if(comm->patSharedQps)
+    {
+        GTEST_SKIP() << "RCCL_PAT_SHARED_QPS was already cached as enabled by an earlier "
+                        "communicator in this process; set it to 0 before launch to run this test";
+    }
+
+    const int rank = comm->rank;
+    const int nranks = comm->nRanks;
+    const int nchannels = comm->nChannels;
+
+    const uint8_t expected_byte = static_cast<uint8_t>(rank);
+    void* send_buffer = nullptr;
+    void* recv_buffer = nullptr;
+    ASSERT_MPI_EQ(hipSuccess, hipMalloc(&send_buffer, sizeof(uint8_t)));
+    auto send_guard = makeDeviceBufferAutoGuard(send_buffer);
+    ASSERT_MPI_EQ(hipSuccess,
+                  hipMalloc(&recv_buffer, sizeof(uint8_t) * MPIEnvironment::world_size));
+    auto recv_guard = makeDeviceBufferAutoGuard(recv_buffer);
+    ASSERT_MPI_EQ(hipSuccess,
+                  hipMemcpy(send_buffer, &expected_byte, sizeof(uint8_t), hipMemcpyHostToDevice));
+
+    ASSERT_MPI_EQ(ncclSuccess,
+                  ncclAllGather(send_buffer,
+                                recv_buffer,
+                                1,
+                                ncclUint8,
+                                comm,
+                                getActiveStream()));
+    ASSERT_MPI_EQ(hipSuccess, hipStreamSynchronize(getActiveStream()));
+
+    std::vector<uint8_t> gathered(static_cast<size_t>(nranks), 0);
+    ASSERT_MPI_EQ(hipSuccess,
+                  hipMemcpy(gathered.data(),
+                            recv_buffer,
+                            sizeof(uint8_t) * nranks,
+                            hipMemcpyDeviceToHost));
+    for(int peer = 0; peer < nranks; ++peer)
+    {
+        ASSERT_MPI_EQ(static_cast<uint8_t>(peer), gathered[static_cast<size_t>(peer)]);
+    }
+
+    // Without sharing, every mask connects both its own direction and the mirror.
+    for(int mask = 1; mask < nranks; mask <<= 1)
+    {
+        const int next_peer = (rank - mask + nranks) % nranks;
+        const int prev_peer = (rank + mask) % nranks;
+        for(int channel = 0; channel < nchannels; ++channel)
+        {
+            ASSERT_MPI_TRUE(comm->channels[channel].peers[next_peer]->recv[0].connected);
+            ASSERT_MPI_TRUE(comm->channels[channel].peers[next_peer]->send[0].connected);
+            ASSERT_MPI_TRUE(comm->channels[channel].peers[prev_peer]->recv[0].connected);
+            ASSERT_MPI_TRUE(comm->channels[channel].peers[prev_peer]->send[0].connected);
+        }
+    }
+}
+
+/**
+ * Sharing puts ReduceScatter and AllGather on the same connections, so they now also share that
+ * connection's ring buffer and its persistent step counter (ncclConnInfo::step). A disagreement
+ * between the two about how many steps an operation consumes cannot show up while only one of
+ * them runs; it shows up on whichever collective runs next, and small drift only after several
+ * rounds. Hence one communicator, both collectives, repeatedly.
+ *
+ * Lazy init makes the ordering meaningful: the first ReduceScatter builds the PAT connections and
+ * every AllGather afterwards has to be satisfied by what that single shared pass created.
+ *
+ * The two are chained, so the pair is an AllReduce and one comparison covers both: every rank
+ * must end each iteration holding nranks times its input. Values are distinct across the whole
+ * vector, so a wrong data-block index surfaces as a permutation rather than as garbage, and they
+ * change every iteration, so a collective that silently did nothing surfaces as stale values.
+ *
+ * Runs in both modes. Under RCCL_PAT_SHARED_QPS=0 it validates the fallback path unchanged.
+ */
+TEST_F(PatSharedConnectionMPITest, AlternatingReduceScatterAndAllGatherOnOneCommunicator)
+{
+    ASSERT_MPI_TRUE(validateTestPrerequisites(/*min_processes=*/4));
+
+    if(!oneRankPerNode())
+    {
+        GTEST_SKIP() << "PAT requires exactly one MPI rank per node";
+    }
+
+    PatTestEnv env;
+
+    ASSERT_MPI_EQ(ncclSuccess, createTestCommunicator());
+
+    ncclComm_t comm = getActiveCommunicator();
+    ASSERT_MPI_TRUE(comm != nullptr);
+    ASSERT_MPI_FALSE(comm->initAlgoChannels[NCCL_ALGO_PAT]);
+
+    // Doubles because the check below needs nranks * value to be exact, and the values have to
+    // stay distinct across a buffer far larger than float can index exactly.
+    constexpr int    kIterations   = 16;
+    constexpr size_t kCountPerRank = 65536;
+    const size_t     nranks        = static_cast<size_t>(comm->nRanks);
+    const size_t     total         = kCountPerRank * nranks;
+
+    void* whole = nullptr;
+    void* part  = nullptr;
+    ASSERT_MPI_EQ(hipSuccess, hipMalloc(&whole, total * sizeof(double)));
+    auto whole_guard = makeDeviceBufferAutoGuard(whole);
+    ASSERT_MPI_EQ(hipSuccess, hipMalloc(&part, kCountPerRank * sizeof(double)));
+    auto part_guard = makeDeviceBufferAutoGuard(part);
+
+    std::vector<double> input(total);
+    std::vector<double> result(total);
+
+    // Only prints under NCCL_DEBUG=INFO; it is how a log can confirm the shape actually run.
+    TEST_INFO("alternating RS+AG: %d iterations, %zu ranks, %zu KiB/collective",
+              kIterations,
+              nranks,
+              total * sizeof(double) / 1024);
+
+    for(int iter = 0; iter < kIterations; ++iter)
+    {
+        SCOPED_TRACE("iteration " + std::to_string(iter));
+
+        for(size_t i = 0; i < total; ++i)
+        {
+            input[i] = static_cast<double>(static_cast<size_t>(iter) * total + i + 1);
+        }
+        ASSERT_MPI_EQ(
+            hipSuccess,
+            hipMemcpy(whole, input.data(), total * sizeof(double), hipMemcpyHostToDevice));
+
+        ASSERT_MPI_EQ(ncclSuccess,
+                      ncclReduceScatter(whole,
+                                        part,
+                                        kCountPerRank,
+                                        ncclDouble,
+                                        ncclSum,
+                                        comm,
+                                        getActiveStream()));
+        if(iter == 0)
+        {
+            // Enqueue, not execution, does the lazy connect, so this holds without a sync and
+            // proves the AllGather below runs on connections ReduceScatter created.
+            ASSERT_MPI_TRUE(comm->initAlgoChannels[NCCL_ALGO_PAT]);
+        }
+        ASSERT_MPI_EQ(
+            ncclSuccess,
+            ncclAllGather(part, whole, kCountPerRank, ncclDouble, comm, getActiveStream()));
+        ASSERT_MPI_EQ(hipSuccess, hipStreamSynchronize(getActiveStream()));
+
+        ASSERT_MPI_EQ(
+            hipSuccess,
+            hipMemcpy(result.data(), whole, total * sizeof(double), hipMemcpyDeviceToHost));
+
+        // Counted rather than asserted per element: ASSERT_MPI_EQ costs an MPI_Allreduce.
+        size_t mismatches = 0;
+        for(size_t i = 0; i < total; ++i)
+        {
+            if(result[i] != input[i] * static_cast<double>(nranks))
+            {
+                ++mismatches;
+            }
+        }
+        ASSERT_MPI_EQ(size_t{0}, mismatches);
+    }
 }
 
 /**
