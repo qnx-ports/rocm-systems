@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from utils.utils_analysis import format_bw_human_readable, format_bytes_human_readable
+from utils.utils_analysis import format_bw_human_readable
 
 COLORS = {
     "kernel": "green",
@@ -42,8 +42,6 @@ def format_value(
         return "N/A"
     if unit in ("GB/s", "Bytes/s"):
         return format_bw_human_readable(value, unit, precision)
-    if unit == "Bytes":
-        return format_bytes_human_readable(value, precision)
     try:
         numeric = float(value)
     except (ValueError, TypeError):
@@ -112,19 +110,6 @@ def safe_float_sum(
         if not math.isnan(numeric):
             terms.append(numeric)
     return sum(terms) if terms else None
-
-
-def scale_or_none(value: Any, factor: float) -> Optional[float]:  # noqa: ANN401
-    """Return ``factor * value`` if *value* is valid, else None."""
-    if value is None:
-        return None
-    try:
-        result = factor * float(value)
-    except (ValueError, TypeError):
-        return None
-    if math.isnan(result):
-        return None
-    return result
 
 
 def format_edge(

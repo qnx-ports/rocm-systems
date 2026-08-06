@@ -115,20 +115,6 @@ class TestSafeFloatSum:
         assert mem_chart_common.safe_float_sum(*args) == expected
 
 
-class TestScaleOrNone:
-    @pytest.mark.parametrize(
-        "value, factor, expected",
-        [
-            (10, 128, 1280.0),
-            (None, 128, None),
-            ("5", 64, 320.0),
-            (_NAN, 128, None),
-        ],
-    )
-    def test_scale(self, value, factor, expected):
-        assert mem_chart_common.scale_or_none(value, factor) == expected
-
-
 class TestFormatEdge:
     @pytest.mark.parametrize(
         "label, value, check_in, check_not_in",

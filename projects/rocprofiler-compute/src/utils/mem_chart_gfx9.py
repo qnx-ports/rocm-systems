@@ -24,7 +24,6 @@ from utils.mem_chart_common import (
     make_arrows,
     mem_chart_cli_main,
     render_chart_to_string,
-    scale_or_none,
     strip_ansi,
 )
 
@@ -73,16 +72,21 @@ _MEM_CHART_DEFAULT_ROWS: tuple[tuple[str, Union[int, float, None]], ...] = (
     ("VL1_L2 Rd", 256),
     ("VL1_L2 Wr", 48),
     ("VL1_L2 Atomic", 12),
+    ("VL1_L2 Read BW", 32e9),
+    ("VL1_L2 Write BW", 3e9),
+    ("VL1_L2 Atomic BW", 768e6),
     ("sL1D Rd", 45),
     ("sL1D Hit", 98),
     ("sL1D Lat", 85),
     ("sL1D_L2 Rd", 1),
     ("sL1D_L2 Wr", 0),
     ("sL1D_L2 Atomic", 0),
+    ("sL1D_L2 Read BW", 64e6),
     ("IL1 Fetch", 32),
     ("IL1 Hit", 99),
     ("IL1 Lat", 42),
     ("IL1_L2 Rd", 1),
+    ("IL1_L2 Read BW", 64e6),
     ("L2 Rd", 300),
     ("L2 Wr", 52),
     ("L2 Atomic", 12),
@@ -162,12 +166,12 @@ def _extract_metrics(metric_dict: dict[str, Any]) -> dict[str, Any]:
     metrics["sl1d_hit"] = get("sL1D Hit")
     metrics["il1_hit"] = get("IL1 Hit")
 
-    # L1→L2 bytes moved (128B/read, 64B/write, 64B/atomic)
-    metrics["vl1_l2_rd_bytes"] = scale_or_none(get("VL1_L2 Rd"), 128)
-    metrics["vl1_l2_wr_bytes"] = scale_or_none(get("VL1_L2 Wr"), 64)
-    metrics["vl1_l2_atomic_bytes"] = scale_or_none(get("VL1_L2 Atomic"), 64)
-    metrics["sl1d_l2_rd_bytes"] = scale_or_none(get("sL1D_L2 Rd"), 64)
-    metrics["il1_l2_rd_bytes"] = scale_or_none(get("IL1_L2 Rd"), 64)
+    # L1→L2 BW (Bytes/s from YAML)
+    metrics["vl1_l2_rd_bw"] = get("VL1_L2 Read BW")
+    metrics["vl1_l2_wr_bw"] = get("VL1_L2 Write BW")
+    metrics["vl1_l2_atomic_bw"] = get("VL1_L2 Atomic BW")
+    metrics["sl1d_l2_rd_bw"] = get("sL1D_L2 Read BW")
+    metrics["il1_l2_rd_bw"] = get("IL1_L2 Read BW")
 
     # L2 panel
     metrics["l2_hit"] = get("L2 Hit")
@@ -358,35 +362,35 @@ def _build_l1_l2_edges(
     arrow_left = arrows["left"]
     arrow_right = arrows["right"]
 
-    vl1_rd_bw = format_value(metrics["vl1_l2_rd_bytes"], "Bytes", 1)
-    vl1_wr_bw = format_value(metrics["vl1_l2_wr_bytes"], "Bytes", 1)
-    vl1_at_bw = format_value(metrics["vl1_l2_atomic_bytes"], "Bytes", 1)
-    sl1d_rd_bw = format_value(metrics["sl1d_l2_rd_bytes"], "Bytes", 1)
-    il1_rd_bw = format_value(metrics["il1_l2_rd_bytes"], "Bytes", 1)
+    vl1_rd_bw = format_value(metrics["vl1_l2_rd_bw"], "Bytes/s", 1)
+    vl1_wr_bw = format_value(metrics["vl1_l2_wr_bw"], "Bytes/s", 1)
+    vl1_at_bw = format_value(metrics["vl1_l2_atomic_bw"], "Bytes/s", 1)
+    sl1d_rd_bw = format_value(metrics["sl1d_l2_rd_bw"], "Bytes/s", 1)
+    il1_rd_bw = format_value(metrics["il1_l2_rd_bw"], "Bytes/s", 1)
     color_sl1d = COLORS["read"]
     color_l1i = COLORS["read"]
 
     vl1d_lines = [
         "",
-        f"[{color_read}]Read[/{color_read}]",
+        f"[{color_read}]Read BW[/{color_read}]",
         f"[{color_read}]{vl1_rd_bw}[/{color_read}]",
         f"[{color_read}]{arrow_left}[/{color_read}]",
         "",
-        f"[{color_write}]Write[/{color_write}]",
+        f"[{color_write}]Write BW[/{color_write}]",
         f"[{color_write}]{vl1_wr_bw}[/{color_write}]",
         f"[{color_write}]{arrow_right}[/{color_write}]",
         "",
-        f"[{color_atomic}]Atomic[/{color_atomic}]",
+        f"[{color_atomic}]Atomic BW[/{color_atomic}]",
         f"[{color_atomic}]{vl1_at_bw}[/{color_atomic}]",
         f"[{color_atomic}]{arrows['both']}[/{color_atomic}]",
     ]
     sl1d_lines = [
-        f"[{color_sl1d}]Read[/{color_sl1d}]",
+        f"[{color_sl1d}]Read BW[/{color_sl1d}]",
         f"[{color_sl1d}]{sl1d_rd_bw}[/{color_sl1d}]",
         f"[{COLORS['read']}]{arrow_left}[/{COLORS['read']}]",
     ]
     l1i_lines = [
-        f"[{color_l1i}]Read[/{color_l1i}]",
+        f"[{color_l1i}]Read BW[/{color_l1i}]",
         f"[{color_l1i}]{il1_rd_bw}[/{color_l1i}]",
         f"[{COLORS['read']}]{arrow_left}[/{COLORS['read']}]",
     ]
