@@ -39,6 +39,19 @@ def get_bw_scale_and_unit(value: float) -> tuple[float, str]:
     return 1.0, "B/s"
 
 
+def _get_bytes_scale_and_unit(value: float) -> tuple[float, str]:
+    """Return the divisor and suffix for a byte count (no '/s')."""
+    if value >= 1e12:
+        return 1e12, "TB"
+    if value >= 1e9:
+        return 1e9, "GB"
+    if value >= 1e6:
+        return 1e6, "MB"
+    if value >= 1e3:
+        return 1e3, "KB"
+    return 1.0, "B"
+
+
 def format_bw_human_readable(
     value: Union[int, float, str, None], unit: str = "Bytes/s", precision: int = 2
 ) -> str:
@@ -61,6 +74,29 @@ def format_bw_human_readable(
     bytes_per_sec = numeric_value * 1e9 if unit == "GB/s" else numeric_value
     divisor, output_unit = get_bw_scale_and_unit(bytes_per_sec)
     return f"{bytes_per_sec / divisor:.{precision}f} {output_unit}"
+
+
+def format_bytes_human_readable(
+    value: Union[int, float, str, None], precision: int = 2
+) -> str:
+    """Format a byte count to human-readable string (e.g. 1.5 GB).
+
+    Similar to :func:`format_bw_human_readable` but without the '/s' suffix.
+    Returns 'NaN' for NaN, 'N/A' for None/invalid.
+    """
+    if value is None:
+        return "N/A"
+
+    try:
+        numeric_value = float(value)
+    except (ValueError, TypeError):
+        return "N/A"
+
+    if math.isnan(numeric_value):
+        return "NaN"
+
+    divisor, output_unit = _get_bytes_scale_and_unit(numeric_value)
+    return f"{numeric_value / divisor:.{precision}f} {output_unit}"
 
 
 @dataclass

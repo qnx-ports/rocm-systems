@@ -141,24 +141,6 @@ class TestFormatEdge:
             assert check_not_in not in result
 
 
-class TestBwColor:
-    @pytest.mark.parametrize(
-        "value, peak, default, expected",
-        [
-            (10, 100, "white", "dim green"),
-            (50, 100, "white", "yellow"),
-            (90, 100, "white", "red"),
-            (None, 100, "white", "white"),
-            (50, None, "white", "white"),
-            (50, 0, "white", "white"),
-            (_NAN, 100, "white", "white"),
-            (50, _NAN, "white", "white"),
-        ],
-    )
-    def test_color(self, value, peak, default, expected):
-        assert mem_chart_common.bw_color(value, peak, default) == expected
-
-
 class TestFormatMemChartHeading:
     @pytest.mark.parametrize(
         "unit, panel_id, expected",
@@ -299,26 +281,6 @@ class TestFabricHbmContent:
         assert "Write BW" in clean
         assert "Atomic BW" in clean
         assert "To/From HBM" not in clean
-
-
-class TestComputePeakBw:
-    def test_valid_specs(self):
-        specs = {
-            "max_sclk": "2100",
-            "max_mclk": "1600",
-            "cu_per_gpu": "304",
-            "total_l2_chan": "128",
-            "num_memory_channels": "128",
-            "sqc_per_gpu": "38",
-        }
-        p = mem_chart_gfx9.compute_peak_bw(specs)
-        assert all(
-            v is not None and v > 0 for v in [p.hbm, p.l2, p.vl1d, p.lds, p.sl1d, p.l1i]
-        )
-
-    def test_empty_specs(self):
-        p = mem_chart_gfx9.compute_peak_bw({})
-        assert p.hbm is None and p.l2 is None
 
 
 class TestNormalizeAndSampleGfx9:

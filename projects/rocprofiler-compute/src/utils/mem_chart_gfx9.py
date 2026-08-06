@@ -13,12 +13,10 @@ from rich.text import Text
 
 from utils.mem_chart_common import (
     COLORS,
-    PeakBandwidths,
     build_bw_edge_column,
     build_cache_panel,
     build_kernel_panel,
     build_legend,
-    bw_color,
     colored,
     format_edge,
     format_mem_chart_heading,
@@ -135,41 +133,6 @@ def normalize_mem_chart_metrics(metric_dict: dict[str, Any]) -> dict[str, Any]:
     return {k: metric_dict.get(k) for k in MEM_CHART_PANEL_METRIC_KEYS}
 
 
-def compute_peak_bw(sys_info_row: dict[str, Any]) -> PeakBandwidths:
-    """Compute theoretical peak BW (GB/s) from MachineSpecs fields."""
-    sclk = _float_or_zero(sys_info_row, "max_sclk")
-    mclk = _float_or_zero(sys_info_row, "max_mclk")
-    cus = _float_or_zero(sys_info_row, "cu_per_gpu")
-    l2_chan = _float_or_zero(sys_info_row, "total_l2_chan")
-    mem_ch = _float_or_zero(sys_info_row, "num_memory_channels")
-    sqcs = _float_or_zero(sys_info_row, "sqc_per_gpu")
-
-    return PeakBandwidths(
-        hbm=mclk / 1000 * 32 * mem_ch if mem_ch else None,
-        l2=sclk / 1000 * 128 * l2_chan if l2_chan else None,
-        vl1d=sclk / 1000 * 128 * cus if cus else None,
-        lds=sclk * cus * 0.128 if cus else None,
-        sl1d=sclk / 1000 * 64 * sqcs if sqcs else None,
-        l1i=sclk / 1000 * 64 * sqcs if sqcs else None,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-
-def _float_or_zero(row: dict[str, Any], key: str) -> float:
-    """Extract a float from *row[key]*, defaulting to 0.0."""
-    val = row.get(key)
-    if val is None:
-        return 0.0
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return 0.0
-
-
 # ---------------------------------------------------------------------------
 # Metric extraction
 # ---------------------------------------------------------------------------
@@ -188,7 +151,6 @@ def _extract_metrics(metric_dict: dict[str, Any]) -> dict[str, Any]:
     metrics["buffer_write"] = get("Buffer Write")
     metrics["buffer_atomic"] = get("Buffer Atomic")
     metrics["lds_req"] = get("LDS Req")
-    metrics["lds_util"] = get("LDS Util")
     metrics["lds_read"] = get("LDS Read")
     metrics["lds_write"] = get("LDS Write")
     metrics["lds_atomic"] = get("LDS Atomic")
@@ -388,49 +350,43 @@ def _build_l1_stack(metrics: dict[str, Any]) -> Table:
 def _build_l1_l2_edges(
     metrics: dict[str, Any],
     arrows: dict[str, str],
-    peak_bw: Optional[PeakBandwidths] = None,
 ) -> Text:
     """L1→L2 edge column: bytes moved (VL1D Rd/Wr/Atomic, sL1D Rd, L1I Rd)."""
-    vl1_peak = peak_bw.vl1d if peak_bw else None
-    sl1d_peak = peak_bw.sl1d if peak_bw else None
-    l1i_peak = peak_bw.l1i if peak_bw else None
-    color_read = bw_color(metrics.get("vl1_l2_rd_bytes"), vl1_peak, COLORS["read"])
-    color_write = bw_color(metrics.get("vl1_l2_wr_bytes"), vl1_peak, COLORS["write"])
-    color_atomic = bw_color(
-        metrics.get("vl1_l2_atomic_bytes"), vl1_peak, COLORS["atomic"]
-    )
+    color_read = COLORS["read"]
+    color_write = COLORS["write"]
+    color_atomic = COLORS["atomic"]
     arrow_left = arrows["left"]
     arrow_right = arrows["right"]
 
-    vl1_rd_bw = format_value(metrics["vl1_l2_rd_bytes"], "Bytes/s", 1)
-    vl1_wr_bw = format_value(metrics["vl1_l2_wr_bytes"], "Bytes/s", 1)
-    vl1_at_bw = format_value(metrics["vl1_l2_atomic_bytes"], "Bytes/s", 1)
-    sl1d_rd_bw = format_value(metrics["sl1d_l2_rd_bytes"], "Bytes/s", 1)
-    il1_rd_bw = format_value(metrics["il1_l2_rd_bytes"], "Bytes/s", 1)
-    color_sl1d = bw_color(metrics.get("sl1d_l2_rd_bytes"), sl1d_peak, COLORS["read"])
-    color_l1i = bw_color(metrics.get("il1_l2_rd_bytes"), l1i_peak, COLORS["read"])
+    vl1_rd_bw = format_value(metrics["vl1_l2_rd_bytes"], "Bytes", 1)
+    vl1_wr_bw = format_value(metrics["vl1_l2_wr_bytes"], "Bytes", 1)
+    vl1_at_bw = format_value(metrics["vl1_l2_atomic_bytes"], "Bytes", 1)
+    sl1d_rd_bw = format_value(metrics["sl1d_l2_rd_bytes"], "Bytes", 1)
+    il1_rd_bw = format_value(metrics["il1_l2_rd_bytes"], "Bytes", 1)
+    color_sl1d = COLORS["read"]
+    color_l1i = COLORS["read"]
 
     vl1d_lines = [
         "",
-        f"[{color_read}]Read BW[/{color_read}]",
+        f"[{color_read}]Read[/{color_read}]",
         f"[{color_read}]{vl1_rd_bw}[/{color_read}]",
         f"[{color_read}]{arrow_left}[/{color_read}]",
         "",
-        f"[{color_write}]Write BW[/{color_write}]",
+        f"[{color_write}]Write[/{color_write}]",
         f"[{color_write}]{vl1_wr_bw}[/{color_write}]",
         f"[{color_write}]{arrow_right}[/{color_write}]",
         "",
-        f"[{color_atomic}]Atomic BW[/{color_atomic}]",
+        f"[{color_atomic}]Atomic[/{color_atomic}]",
         f"[{color_atomic}]{vl1_at_bw}[/{color_atomic}]",
         f"[{color_atomic}]{arrows['both']}[/{color_atomic}]",
     ]
     sl1d_lines = [
-        f"[{color_sl1d}]Read BW[/{color_sl1d}]",
+        f"[{color_sl1d}]Read[/{color_sl1d}]",
         f"[{color_sl1d}]{sl1d_rd_bw}[/{color_sl1d}]",
         f"[{COLORS['read']}]{arrow_left}[/{COLORS['read']}]",
     ]
     l1i_lines = [
-        f"[{color_l1i}]Read BW[/{color_l1i}]",
+        f"[{color_l1i}]Read[/{color_l1i}]",
         f"[{color_l1i}]{il1_rd_bw}[/{color_l1i}]",
         f"[{COLORS['read']}]{arrow_left}[/{COLORS['read']}]",
     ]
@@ -456,31 +412,21 @@ def _build_l2_panel(metrics: dict[str, Any]) -> Panel:
 def _build_l2_fabric_edges(
     metrics: dict[str, Any],
     arrows: dict[str, str],
-    peak_bw: Optional[PeakBandwidths] = None,
 ) -> Text:
     """L2→Fabric edges: Read BW and Write/Atomic BW."""
-    l2_peak = peak_bw.l2 if peak_bw else None
     return build_bw_edge_column(
         [
             (
                 "Read BW",
                 format_value(metrics["l2_fabric_read_bw"], "Bytes/s", 1),
                 "left",
-                bw_color(
-                    metrics.get("l2_fabric_read_bw"),
-                    l2_peak,
-                    COLORS["read"],
-                ),
+                COLORS["read"],
             ),
             (
                 "Write/Atomic BW",
                 format_value(metrics["l2_fabric_wr_at_bw"], "Bytes/s", 1),
                 "right",
-                bw_color(
-                    metrics.get("l2_fabric_wr_at_bw"),
-                    l2_peak,
-                    COLORS["write"],
-                ),
+                COLORS["write"],
             ),
         ],
         arrows,
@@ -533,16 +479,14 @@ def _build_fabric_content(metrics: dict[str, Any]) -> str:
 
 def _build_hbm_content(
     metrics: dict[str, Any],
-    peak_bw: Optional[PeakBandwidths] = None,
 ) -> str:
     """Build Rich markup for the HBM panel (gfx950 BW metrics)."""
     color_read = COLORS["read"]
     color_write = COLORS["write"]
     color_atomic = COLORS["atomic"]
-    hbm_peak = peak_bw.hbm if peak_bw else None
-    color_rd = bw_color(metrics.get("hbm_read_bw"), hbm_peak, color_read)
-    color_wr = bw_color(metrics.get("hbm_write_bw"), hbm_peak, color_write)
-    color_at = bw_color(metrics.get("hbm_atomic_bw"), hbm_peak, color_atomic)
+    color_rd = color_read
+    color_wr = color_write
+    color_at = color_atomic
     rd_bw = format_value(metrics["hbm_read_bw"], "Bytes/s", 1)
     wr_bw = format_value(metrics["hbm_write_bw"], "Bytes/s", 1)
     at_bw = format_value(metrics["hbm_atomic_bw"], "Bytes/s", 1)
@@ -559,7 +503,7 @@ def _build_hbm_content(
     return "\n".join(lines)
 
 
-def _build_xgmi_row(console: Console, metrics: dict[str, Any]) -> None:
+def _build_xgmi_row(console: Console, metrics: dict[str, Any], fabric_col: int) -> None:
     """Render the xGMI block above the main diagram with BW metrics."""
     color_read = COLORS["read"]
     color_write = COLORS["write"]
@@ -575,12 +519,12 @@ def _build_xgmi_row(console: Console, metrics: dict[str, Any]) -> None:
         height=3,
     )
     xgmi_layout = Table.grid(padding=0)
-    xgmi_layout.add_column(width=97)
+    xgmi_layout.add_column(width=fabric_col)
     xgmi_layout.add_column()
     xgmi_layout.add_row("", xgmi_panel)
     console.print(xgmi_layout)
 
-    pad = " " * 100
+    pad = " " * (fabric_col + 3)
     arrow_lines = Text.from_markup(
         f"{pad}[{color_read}]|^  Read BW    {read_bw}[/{color_read}]\n"
         f"{pad}[{color_write}]||  Write BW   {write_bw}[/{color_write}]\n"
@@ -589,7 +533,7 @@ def _build_xgmi_row(console: Console, metrics: dict[str, Any]) -> None:
     console.print(arrow_lines)
 
 
-def _build_pcie_row(console: Console, metrics: dict[str, Any]) -> None:
+def _build_pcie_row(console: Console, metrics: dict[str, Any], fabric_col: int) -> None:
     """Render the PCIe block below the main diagram with BW metrics."""
     color_read = COLORS["read"]
     color_write = COLORS["write"]
@@ -598,7 +542,8 @@ def _build_pcie_row(console: Console, metrics: dict[str, Any]) -> None:
     write_bw = format_value(metrics.get("pcie_write_bw"), "Bytes/s", 1)
     atomic_bw = format_value(metrics.get("pcie_atomic_bw"), "Bytes/s", 1)
 
-    pad = " " * 100
+    pcie_width = 46
+    pad = " " * (fabric_col + 3)
     arrow_lines = Text.from_markup(
         f"{pad}[{color_read}]||  Read BW    {read_bw}[/{color_read}]\n"
         f"{pad}[{color_write}]||  Write BW   {write_bw}[/{color_write}]\n"
@@ -609,11 +554,11 @@ def _build_pcie_row(console: Console, metrics: dict[str, Any]) -> None:
     pcie_panel = Panel(
         "[dim]PCIe (to CPU or Non-XGMI connected GPU)[/dim]",
         border_style=COLORS["block"],
-        width=46,
+        width=pcie_width,
         height=3,
     )
     pcie_layout = Table.grid(padding=0)
-    pcie_layout.add_column(width=87)
+    pcie_layout.add_column(width=fabric_col - (pcie_width - 24) // 2)
     pcie_layout.add_column()
     pcie_layout.add_row("", pcie_panel)
     console.print(pcie_layout)
@@ -667,7 +612,6 @@ def create_mem_chart_diagram(
     show_debug: bool = False,
     chart_title: str = "",
     gpu_arch: Optional[str] = None,
-    peak_bw: Optional[PeakBandwidths] = None,
 ) -> None:
     """Create the CDNA memory diagram matching the reference PNG layout."""
     metrics = _extract_metrics(metric_dict)
@@ -679,12 +623,12 @@ def create_mem_chart_diagram(
     kernel = _build_kernel_panel()
     req_edges = _build_request_edges(metrics, kernel_arrows)
     l1_stack = _build_l1_stack(metrics)
-    l1_l2_edges = _build_l1_l2_edges(metrics, std_arrows, peak_bw)
+    l1_l2_edges = _build_l1_l2_edges(metrics, std_arrows)
     l2 = _build_l2_panel(metrics)
-    l2_fab_edges = _build_l2_fabric_edges(metrics, std_arrows, peak_bw)
+    l2_fab_edges = _build_l2_fabric_edges(metrics, std_arrows)
     if is_gfx950:
         fabric = _ip_block("Data Fabric", 22, COLORS["block"])
-        hbm_content = _build_hbm_content(metrics, peak_bw)
+        hbm_content = _build_hbm_content(metrics)
         hbm = _ip_block("HBM", 18, COLORS["block"], hbm_content)
     else:
         fabric_content = _build_fabric_content(metrics)
@@ -716,7 +660,7 @@ def create_mem_chart_diagram(
         console.print(f"[bold]{chart_title}[/bold]")
 
     if is_gfx950:
-        _build_xgmi_row(console, metrics)
+        _build_xgmi_row(console, metrics, fabric_col)
         console.print()
     _print_scope_bar(console, chart_width, fabric_col)
     console.print()
@@ -725,7 +669,7 @@ def create_mem_chart_diagram(
     console.print()
 
     if is_gfx950:
-        _build_pcie_row(console, metrics)
+        _build_pcie_row(console, metrics, fabric_col)
         console.print()
 
     console.print(build_legend())
@@ -764,7 +708,6 @@ def plot_mem_chart(
     *,
     chart_title: Optional[str] = None,
     gpu_arch: Optional[str] = None,
-    peak_bw: Optional[PeakBandwidths] = None,
 ) -> str:
     """Render the CDNA memory chart and return as a string."""
     resolved_heading = (
@@ -775,8 +718,6 @@ def plot_mem_chart(
     kwargs: dict[str, Any] = {"chart_title": resolved_heading}
     if gpu_arch is not None:
         kwargs["gpu_arch"] = gpu_arch
-    if peak_bw is not None:
-        kwargs["peak_bw"] = peak_bw
     return render_chart_to_string(
         create_mem_chart_diagram,
         metric_dict,

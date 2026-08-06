@@ -9,7 +9,6 @@ import math
 import pathlib
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
 from io import StringIO
 from typing import Any, Optional, Union
 
@@ -17,7 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from utils.utils_analysis import format_bw_human_readable
+from utils.utils_analysis import format_bw_human_readable, format_bytes_human_readable
 
 COLORS = {
     "kernel": "green",
@@ -43,6 +42,8 @@ def format_value(
         return "N/A"
     if unit in ("GB/s", "Bytes/s"):
         return format_bw_human_readable(value, unit, precision)
+    if unit == "Bytes":
+        return format_bytes_human_readable(value, precision)
     try:
         numeric = float(value)
     except (ValueError, TypeError):
@@ -186,48 +187,6 @@ def build_legend(include_stall: bool = False) -> str:
         for symbol, label, color_key in entries
     ]
     return f"[dim]Legend:[/dim] {'  '.join(items)}"
-
-
-# ---------------------------------------------------------------------------
-# BW color-coding (NCU-style % of peak)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class PeakBandwidths:
-    """Theoretical peak bandwidths (GB/s) per memory level."""
-
-    hbm: Optional[float] = None
-    l2: Optional[float] = None
-    vl1d: Optional[float] = None
-    lds: Optional[float] = None
-    sl1d: Optional[float] = None
-    l1i: Optional[float] = None
-
-
-def bw_color(
-    value: Optional[float],
-    peak: Optional[float],
-    default: str = "white",
-) -> str:
-    """Rich color by utilization: green(low) -> yellow(mid) -> red(high)."""
-    if value is None or peak is None or peak <= 0:
-        return default
-    try:
-        pct = 100.0 * float(value) / float(peak)
-    except (ValueError, TypeError):
-        return default
-    if math.isnan(pct):
-        return default
-    if pct < 20:
-        return "dim green"
-    if pct < 40:
-        return "green"
-    if pct < 60:
-        return "yellow"
-    if pct < 80:
-        return "bright_yellow"
-    return "red"
 
 
 # ---------------------------------------------------------------------------
