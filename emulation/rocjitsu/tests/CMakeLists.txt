@@ -1302,6 +1302,7 @@ rj_add_interposer_test_suite(
 rj_add_interposer_test_suite(
     InterposerGemTest
         GemNamespaceIsPrivateButSharedByDuplicates
+        IndependentDrmFilesRejectOverlappingMappings
         ReusedDmabufFdMintsDistinctHandles
         UnmapWithWrongHandleFails
         MapSucceedsAfterExportFdClosed

@@ -1009,7 +1009,7 @@ public:
     iovec remote{reinterpret_cast<void *>(static_cast<uintptr_t>(address)), bytes};
     long copied;
     do {
-      copied = syscall(SYS_process_vm_readv, getpid(), &local, 1, &remote, 1, 0);
+      copied = process_vm_readv(getpid(), &local, 1, &remote, 1, 0);
     } while (copied < 0 && errno == EINTR);
     return copied == static_cast<long>(bytes) ? 0 : -EFAULT;
   }
@@ -1275,10 +1275,11 @@ public:
   /// the PTEs, and publishes the output timeline point. The lock order
   /// fd_mutex_ -> driver page-table lock matches
   /// teardown_gem_entry_locked, so there is no inversion.
-  /// @param replace When true (AMDGPU_VA_OP_REPLACE), first evict any existing range
-  ///   in the calling DRM-file namespace that OVERLAPS {va_address, map_size}, so the
-  ///   old owner's bookkeeping does not later tear down the replacement's PTEs.
-  ///   When false (AMDGPU_VA_OP_MAP), an overlapping pre-existing range is a conflict.
+  /// @param replace When true (AMDGPU_VA_OP_REPLACE), reject overlap with another
+  ///   DRM file before evicting an existing range in the calling DRM-file namespace.
+  ///   The namespaces share one simulated GPU page table, so neither operation may
+  ///   overwrite another file's PTEs. When false (AMDGPU_VA_OP_MAP), any overlapping
+  ///   pre-existing range is a conflict.
   /// @returns Zero when the range was installed, `-ENOENT` for an unknown handle in
   ///   this DRM-file namespace, or another negative errno for invalid requests.
   [[nodiscard]] int gem_map(int drm_fd, uint32_t handle, uint64_t va_address, uint64_t offset_in_bo,
@@ -1307,14 +1308,16 @@ public:
         map_size > gem.size - offset_in_bo)
       return -EINVAL;
     const GemMapping range{va_address, map_size};
-    // Handle the target VA range's current occupant. REPLACE evicts any current
-    // holder (possibly a different handle) so its records cannot later unmap the new
-    // PTEs. Plain MAP treats an existing range as a conflict rather than silently
-    // double-mapping over another handle's PTEs.
+    // Handle the target VA range's current occupant. Independent DRM files have
+    // private handle namespaces but currently share one simulated GPU page table,
+    // so a foreign mapping must never be overwritten. REPLACE may evict only a
+    // current holder from this DRM file; plain MAP rejects any current holder.
     if (replace) {
+      if (range_is_mapped_by_other_drm_file_locked(file->second->id, range))
+        return -EINVAL;
       if (!evict_range_locked(drv, file->second->id, range, /*allow_missing=*/true))
         return -EINVAL;
-    } else if (range_is_mapped_locked(file->second->id, range)) {
+    } else if (range_is_mapped_locked(range)) {
       return -EINVAL;
     }
     if (!gem.cpu_ptr) {
@@ -1723,12 +1726,27 @@ private:
     return evicted_any || allow_missing;
   }
 
-  /// @brief Whether any GEM entry owns a range OVERLAPPING @p range. Caller holds
-  /// fd_mutex_. Used by plain MAP to reject a map that would collide with (not just
-  /// exactly duplicate) an existing range's PTEs.
-  [[nodiscard]] bool range_is_mapped_locked(uint64_t drm_file_id, const GemMapping &range) const {
+  /// @brief Whether any GEM entry owns a range OVERLAPPING @p range in the shared
+  /// simulated GPU page table. Caller holds fd_mutex_. Used by plain MAP to reject
+  /// a map that would collide with an existing range's PTEs, regardless of which
+  /// DRM file owns it.
+  [[nodiscard]] bool range_is_mapped_locked(const GemMapping &range) const {
     for (const auto &[handle, gem] : gem_entries_) {
-      if (gem.drm_file_id != drm_file_id)
+      for (const auto &existing : gem.installed_vas)
+        if (existing.overlaps(range))
+          return true;
+    }
+    return false;
+  }
+
+  /// @brief Whether a GEM entry owned by a DRM file other than @p drm_file_id
+  /// overlaps @p range in the shared simulated GPU page table. Caller holds
+  /// fd_mutex_. Used by REPLACE to reject a foreign collision before evicting any
+  /// mapping owned by the caller.
+  [[nodiscard]] bool range_is_mapped_by_other_drm_file_locked(uint64_t drm_file_id,
+                                                              const GemMapping &range) const {
+    for (const auto &[handle, gem] : gem_entries_) {
+      if (gem.drm_file_id == drm_file_id)
         continue;
       for (const auto &existing : gem.installed_vas)
         if (existing.overlaps(range))

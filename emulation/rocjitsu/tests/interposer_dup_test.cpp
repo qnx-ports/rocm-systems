@@ -321,6 +321,8 @@ TEST(InterposerDupTest, FcntlDupfdReplacesStaleDrmTracking) {
   ASSERT_EQ(ioctl(first, DRM_IOCTL_SYNCOBJ_CREATE, &first_syncobj), 0);
   ASSERT_EQ(ioctl(second, DRM_IOCTL_SYNCOBJ_CREATE, &second_syncobj), 0);
 
+  // Deliberately bypass the interposed close() so its DRM tracking entry stays
+  // stale; the fcntl duplicate below must replace that stale entry safely.
   ASSERT_EQ(syscall(SYS_close, stale_fd), 0);
   int reused = fcntl(second, F_DUPFD_CLOEXEC, stale_fd);
   ASSERT_EQ(reused, stale_fd);
@@ -1093,6 +1095,66 @@ TEST(InterposerGemTest, GemNamespaceIsPrivateButSharedByDuplicates) {
   EXPECT_EQ(close(owner_dup), 0);
   EXPECT_EQ(close(foreign), 0);
   EXPECT_EQ(close(owner), 0);
+  EXPECT_EQ(close(kfd), 0);
+}
+
+TEST(InterposerGemTest, IndependentDrmFilesRejectOverlappingMappings) {
+  int kfd = open_kfd();
+  ASSERT_GE(kfd, 0);
+  ASSERT_TRUE(kfd_version_ok(kfd));
+  int first_drm = open_drm_render();
+  int second_drm = open_drm_render();
+  if (first_drm < 0 || second_drm < 0)
+    GTEST_SKIP() << "synthetic DRM render node unavailable in this configuration";
+
+  constexpr size_t kBoSize = 0x1000;
+  constexpr uint64_t kVa = 0x1000000000ULL;
+  int first_dmabuf = make_sized_memfd(kBoSize);
+  int second_dmabuf = make_sized_memfd(kBoSize);
+  ASSERT_GE(first_dmabuf, 0);
+  ASSERT_GE(second_dmabuf, 0);
+  uint32_t first_handle = 0;
+  uint32_t second_handle = 0;
+  ASSERT_TRUE(prime_import(first_drm, first_dmabuf, &first_handle));
+  ASSERT_TRUE(prime_import(second_drm, second_dmabuf, &second_handle));
+
+  const unsigned long gem_va = DRM_AMDGPU_GEM_VA_request();
+  drm_amdgpu_gem_va first_map{};
+  first_map.handle = first_handle;
+  first_map.operation = AMDGPU_VA_OP_MAP;
+  first_map.flags = AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
+  first_map.va_address = kVa;
+  first_map.map_size = kBoSize;
+  ASSERT_EQ(ioctl(first_drm, gem_va, &first_map), 0);
+
+  drm_amdgpu_gem_va second_map = first_map;
+  second_map.handle = second_handle;
+  EXPECT_EQ(ioctl(second_drm, gem_va, &second_map), -1);
+  EXPECT_EQ(errno, EINVAL);
+  second_map.operation = AMDGPU_VA_OP_REPLACE;
+  EXPECT_EQ(ioctl(second_drm, gem_va, &second_map), -1);
+  EXPECT_EQ(errno, EINVAL);
+
+  drm_amdgpu_gem_va first_unmap = first_map;
+  first_unmap.operation = AMDGPU_VA_OP_UNMAP;
+  first_unmap.flags = 0;
+  ASSERT_EQ(ioctl(first_drm, gem_va, &first_unmap), 0)
+      << "rejected foreign updates must leave the first mapping intact";
+
+  // Once the first file releases the shared VA, the second file may claim it.
+  second_map.operation = AMDGPU_VA_OP_MAP;
+  ASSERT_EQ(ioctl(second_drm, gem_va, &second_map), 0);
+  drm_amdgpu_gem_va second_unmap = second_map;
+  second_unmap.operation = AMDGPU_VA_OP_UNMAP;
+  second_unmap.flags = 0;
+  EXPECT_EQ(ioctl(second_drm, gem_va, &second_unmap), 0);
+
+  EXPECT_EQ(gem_close(second_drm, second_handle), 0);
+  EXPECT_EQ(gem_close(first_drm, first_handle), 0);
+  EXPECT_EQ(close(second_dmabuf), 0);
+  EXPECT_EQ(close(first_dmabuf), 0);
+  EXPECT_EQ(close(second_drm), 0);
+  EXPECT_EQ(close(first_drm), 0);
   EXPECT_EQ(close(kfd), 0);
 }
 
