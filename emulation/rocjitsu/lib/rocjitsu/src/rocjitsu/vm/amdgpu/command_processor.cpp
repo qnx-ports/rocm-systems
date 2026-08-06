@@ -486,12 +486,12 @@ void CommandProcessor::init_wavefront_regs(ComputeUnitCore *cu, Wavefront *wf,
     wf->set_scratch_base(wave_scratch);
     wf->set_scratch_lane_size(pkt.private_segment_fixed_size);
     util::Logger::cp([&](auto &os) {
-      os << std::format(
-          "SCRATCH wf{} pool={:#x} wave_scratch={:#x} per_wave={} priv_size={} "
-          "backing_addr={:#x} mapped={}",
-          wf->wf_id(), scratch_pool, wave_scratch, per_wave_size, pkt.private_segment_fixed_size,
-          pkt.scratch_backing_addr,
-          memory_ ? (memory_->resolve_host_ptr(wave_scratch, pkt.process_id) != nullptr) : false);
+      os << std::format("SCRATCH wf{} pool={:#x} wave_scratch={:#x} per_wave={} priv_size={} "
+                        "backing_addr={:#x} mapped={}",
+                        wf->wf_id(), scratch_pool, wave_scratch, per_wave_size,
+                        pkt.private_segment_fixed_size, pkt.scratch_backing_addr,
+                        memory_ ? memory_->has_page_table_mapping(wave_scratch, pkt.process_id)
+                                : false);
     });
 
     if (flat_scratch_init_sgpr >= 0) {
