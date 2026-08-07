@@ -279,6 +279,12 @@ typedef struct hipPointerAttribute_t {
 #define __HIP_NODISCARD
 #endif
 
+#if defined(__cplusplus) && (__cplusplus >= 201103L || defined(_MSC_VER))
+#define UINT32BASE : uint32_t
+#else
+#define UINT32BASE
+#endif
+
 /**
  * HIP error type
  *
@@ -286,7 +292,7 @@ typedef struct hipPointerAttribute_t {
 // Developer note - when updating these, update the hipErrorName and hipErrorString functions in
 // NVCC and HIP-Clang paths Also update the hipCUDAErrorTohipError function in NVCC path.
 
-typedef enum __HIP_NODISCARD hipError_t {
+typedef enum __HIP_NODISCARD hipError_t UINT32BASE {
   hipSuccess = 0,            ///< Successful completion.
   hipErrorInvalidValue = 1,  ///< One or more of the parameters passed to the API call is NULL
                              ///< or not in an acceptable range.
@@ -396,7 +402,7 @@ typedef enum __HIP_NODISCARD hipError_t {
   hipErrorInvalidResourceType = 914,       ///< Resource type is not valid for the operation.
   hipErrorInvalidResourceConfiguration = 915,  ///< Resource configuration is not valid for
                                                ///< the operation.
-  hipErrorStreamDetached = 916,            ///< The stream is detached.                                              
+  hipErrorStreamDetached = 916,            ///< The stream is detached.
   hipErrorUnknown = 999,                   ///< Unknown error.
   // HSA Runtime Error Codes start here.
   hipErrorRuntimeMemory = 1052,  ///< HSA runtime memory call returned error.  Typically not seen
@@ -9990,7 +9996,7 @@ hipError_t hipMemAddressReserve(void** ptr, size_t size, size_t alignment, void*
  * @param [in] prop - properties of the allocation.
  * @param [in] flags - currently unused, must be zero.
  * @returns #hipSuccess, #hipErrorInvalidValue, #hipErrorNotSupported
- * 
+ *
  * This API creates a memory allocation on the target device specified through the prop structure.
  * The prop allocation type must be specified as either #hipMemAllocationTypePinned or
  * #hipMemAllocationTypeUncached.
