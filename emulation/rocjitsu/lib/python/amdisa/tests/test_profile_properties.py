@@ -103,6 +103,24 @@ def test_descriptor_vgpr_count_granule(profile, expected_wave32, expected_wave64
     assert profile.descriptor_vgpr_count_granule_wave64 == expected_wave64
 
 
+@pytest.mark.parametrize(
+    ('profile', 'expected'),
+    [
+        (Cdna1Profile(), False),
+        (Cdna2Profile(), False),
+        (CdnaProfile(), False),
+        (Rdna1Profile(), False),
+        (Rdna2Profile(), False),
+        (Rdna3Profile(), False),
+        (Rdna3_5Profile(), False),
+        (Rdna4Profile(), False),
+        (Gfx1250Profile(), True),
+    ],
+)
+def test_uses_vgpr_msb_indexing(profile, expected):
+    assert profile.uses_vgpr_msb_indexing is expected
+
+
 def test_only_gfx1250_splits_execution_sources():
     assert Gfx1250Profile().split_execution_sources
     assert not Rdna4Profile().split_execution_sources
