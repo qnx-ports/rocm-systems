@@ -485,14 +485,6 @@ ncclResult_t IbCastInitDevices(ncclDebugLogger_t logFunction, ncclProfilerCallba
             ncclSetThreadName(IbCastAsyncThread.native_handle(), "NCCL IbAsync %2d", IbCastNDevs);
             IbCastAsyncThread.detach();
 
-            // Register device with telemetry
-            {
-              char telEthDev[64];
-              rcclTelemetryGetEthDevice(IbCastDevs[IbCastNDevs].devName, telEthDev, sizeof(telEthDev));
-              rcclTelemetryRegisterDevice(IbCastNDevs, IbCastDevs[IbCastNDevs].devName,
-                                          telEthDev, "IB-CAST");
-            }
-
             IbCastNDevs++;
             nPorts++;
           }
@@ -531,6 +523,16 @@ ncclResult_t IbCastInitDevices(ncclDebugLogger_t logFunction, ncclProfilerCallba
       NCCLCHECKGOTO(IbCastGetRealPort(IbCastDevs[d].pciPath, &IbCastDevs[d].realPort, d), ret, fail);
       snprintf(line + strlen(line), sizeof(line) - strlen(line), " [%d]%s:%d/%s", d, IbCastDevs[d].devName,
                IbCastDevs[d].portNum, NCCL_IB_LLSTR(IbCastDevs[d].link));
+
+      // Register with telemetry only here, after the sort: the data path books
+      // every counter under the post-sort index d, so registering during
+      // enumeration would attach each slot to whichever NIC happened to occupy
+      // that position in the ibv_get_device_list order.
+      {
+        char telEthDev[64];
+        rcclTelemetryGetEthDevice(IbCastDevs[d].devName, telEthDev, sizeof(telEthDev));
+        rcclTelemetryRegisterDevice(d, IbCastDevs[d].devName, telEthDev, "IB-CAST");
+      }
 
       // Add this plain physical device to the list of virtual devices (after sorting)
       int vDev;
