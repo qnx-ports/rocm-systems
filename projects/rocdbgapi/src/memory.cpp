@@ -1156,7 +1156,8 @@ amd_dbgapi_dwarf_address_space_to_address_space (
 
 amd_dbgapi_status_t AMD_DBGAPI
 amd_dbgapi_convert_address_space (
-  amd_dbgapi_wave_id_t wave_id, amd_dbgapi_lane_id_t lane_id,
+  amd_dbgapi_process_id_t process_id, amd_dbgapi_wave_id_t wave_id,
+  amd_dbgapi_lane_id_t lane_id,
   amd_dbgapi_address_space_id_t source_address_space_id,
   amd_dbgapi_segment_address_t source_segment_address,
   amd_dbgapi_address_space_id_t destination_address_space_id,
@@ -1164,8 +1165,9 @@ amd_dbgapi_convert_address_space (
   amd_dbgapi_size_t *destination_contiguous_bytes)
 {
   TRACE_BEGIN (
-    param_in (wave_id), param_in (lane_id), param_in (source_address_space_id),
-    param_in (source_segment_address), param_in (destination_address_space_id),
+    param_in (process_id), param_in (wave_id), param_in (lane_id),
+    param_in (source_address_space_id), param_in (source_segment_address),
+    param_in (destination_address_space_id),
     param_in (destination_segment_address),
     param_in (destination_contiguous_bytes));
   TRY
@@ -1176,6 +1178,11 @@ amd_dbgapi_convert_address_space (
     if (destination_segment_address == nullptr
         || destination_contiguous_bytes == nullptr)
       THROW (AMD_DBGAPI_STATUS_ERROR_INVALID_ARGUMENT);
+
+    process_t *process = process_t::find (process_id);
+
+    if (process == nullptr)
+      THROW (AMD_DBGAPI_STATUS_ERROR_INVALID_PROCESS_ID);
 
     const address_space_t *source_address_space
       = find (source_address_space_id);
@@ -1190,7 +1197,8 @@ amd_dbgapi_convert_address_space (
 
     if (wave != nullptr)
       {
-        if (!wave->architecture ().is_address_space_supported (
+        if (&(wave->process ()) != process
+            || !wave->architecture ().is_address_space_supported (
               *destination_address_space)
             || !wave->architecture ().is_address_space_supported (
               *source_address_space))
@@ -1227,6 +1235,7 @@ amd_dbgapi_convert_address_space (
       }
   }
   CATCH (AMD_DBGAPI_STATUS_ERROR_NOT_INITIALIZED,
+         AMD_DBGAPI_STATUS_ERROR_INVALID_PROCESS_ID,
          AMD_DBGAPI_STATUS_ERROR_INVALID_WAVE_ID,
          AMD_DBGAPI_STATUS_ERROR_INVALID_LANE_ID,
          AMD_DBGAPI_STATUS_ERROR_INVALID_ADDRESS_SPACE_ID,
