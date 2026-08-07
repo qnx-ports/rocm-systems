@@ -541,44 +541,61 @@ calculate_load_bias(const target_elf& elf, const mapped_object& object)
     auto page_size =
         (page_size_value > 0) ? static_cast<uint64_t>(page_size_value) : uint64_t{4096};
 
-    auto first_load_segment = std::min_element(
-        elf.load_segments.begin(), elf.load_segments.end(), [](const auto& lhs, const auto& rhs) {
-            return lhs.p_vaddr < rhs.p_vaddr;
-        });
-    if(first_load_segment == elf.load_segments.end())
+    // A candidate bias is only valid if it accounts for every file-backed
+    // PT_LOAD segment, not just the one it was derived from: two segments can
+    // land in the same maps entry when the kernel merges adjacent read-only
+    // pages, so no single mapping/segment pair is inherently "the first".
+    auto segment_is_mapped_at_bias = [&](const Elf64_Phdr& segment, uint64_t bias) {
+        if(segment.p_filesz == 0) return true;
+
+        auto segment_file_page    = align_down(segment.p_offset, page_size);
+        auto segment_virtual_page = align_down(segment.p_vaddr, page_size);
+        auto expected_start       = checked_add(bias, segment_virtual_page);
+        if(!expected_start) return false;
+
+        return std::any_of(
+            object.mappings.begin(), object.mappings.end(), [&](const auto& mapping) {
+                return mapping.start == *expected_start && mapping.file_offset == segment_file_page;
+            });
+    };
+
+    auto candidates = std::vector<uint64_t>{};
+    for(const auto& mapping : object.mappings)
     {
-        ROCP_ERROR << "[rocprofiler-sdk-rocattach] Target ELF has no PT_LOAD segments: "
-                   << object.path;
-        return std::nullopt;
+        for(const auto& segment : elf.load_segments)
+        {
+            if(segment.p_filesz == 0) continue;
+
+            auto segment_file_page = align_down(segment.p_offset, page_size);
+            if(mapping.file_offset != segment_file_page) continue;
+
+            auto segment_virtual_page = align_down(segment.p_vaddr, page_size);
+            auto candidate =
+                checked_sub(static_cast<uint64_t>(mapping.start), segment_virtual_page);
+            if(!candidate) continue;
+
+            auto all_segments_mapped = std::all_of(
+                elf.load_segments.begin(), elf.load_segments.end(), [&](const auto& other) {
+                    return segment_is_mapped_at_bias(other, *candidate);
+                });
+            if(all_segments_mapped &&
+               std::find(candidates.begin(), candidates.end(), *candidate) == candidates.end())
+            {
+                candidates.emplace_back(*candidate);
+            }
+        }
     }
 
-    auto first_mapping        = object.mappings.front();
-    auto segment_file_page    = align_down(first_load_segment->p_offset, page_size);
-    auto segment_virtual_page = align_down(first_load_segment->p_vaddr, page_size);
-    // Match the maps entry to the PT_LOAD segment by file page before using it
-    // to derive the ET_DYN load bias.
-    if(first_mapping.file_offset != segment_file_page)
+    if(candidates.size() != 1)
     {
-        ROCP_ERROR << "[rocprofiler-sdk-rocattach] First target mapping for " << object.path
-                   << " has file offset 0x" << std::hex << first_mapping.file_offset
-                   << ", but the first PT_LOAD segment starts at file page 0x" << segment_file_page
-                   << std::dec;
-        return std::nullopt;
-    }
-
-    // For ET_DYN shared objects, load bias is runtime start minus page-aligned
-    // segment virtual address.
-    auto bias = checked_sub(static_cast<uint64_t>(first_mapping.start), segment_virtual_page);
-    if(!bias)
-    {
-        ROCP_ERROR << "[rocprofiler-sdk-rocattach] Invalid target mapping/segment pair for "
-                   << object.path << ": mapping start is below segment virtual page";
+        ROCP_ERROR << "[rocprofiler-sdk-rocattach] Could not calculate a unique load bias for "
+                   << object.path << " from its PT_LOAD segments and mappings";
         return std::nullopt;
     }
 
     ROCP_TRACE << "[rocprofiler-sdk-rocattach] Calculated target load bias for " << object.path
-               << " as 0x" << std::hex << *bias << std::dec;
-    return bias;
+               << " as 0x" << std::hex << candidates.front() << std::dec;
+    return candidates.front();
 }
 
 std::optional<uint64_t>
