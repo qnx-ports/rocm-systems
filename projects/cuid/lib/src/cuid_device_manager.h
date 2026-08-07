@@ -177,8 +177,8 @@ class CuidDeviceManager {
   std::map<amdcuid_id_t, DevicePtr, CuidComparator> cuid_index_;
 
   // Cuid Files
-  CuidFile unpriv_cuid_file_{CuidUtilities::cuid_file(), true};
-  CuidFile priv_cuid_file_{CuidUtilities::priv_cuid_file(), false};
+  CuidFile unpriv_cuid_file_{CuidUtilities::cuid_file(), false};
+  CuidFile priv_cuid_file_{CuidUtilities::priv_cuid_file(), true};
 
   // cuid hmac for deriving cuids
   cuid_hmac manager_hmac = cuid_hmac();

@@ -24,6 +24,8 @@
 #ifndef IPC_PROTOCOL_H
 #define IPC_PROTOCOL_H
 
+#include <limits.h>
+
 #include <cstdint>
 
 #include "include/amd_cuid.h"
@@ -35,7 +37,7 @@ enum class IpcMessageType : uint8_t { ADD_DEVICE = 1, REFRESH_DEVICES = 2 };
 
 struct IpcRequest {
   IpcMessageType type;
-  char* device_path;                  // used for ADD_DEVICE, empty otherwise
+  char device_path[PATH_MAX];         // used for ADD_DEVICE, empty otherwise
   amdcuid_device_type_t device_type;  // used for ADD_DEVICE, AMDCUID_DEVICE_TYPE_NONE otherwise
 };
 
