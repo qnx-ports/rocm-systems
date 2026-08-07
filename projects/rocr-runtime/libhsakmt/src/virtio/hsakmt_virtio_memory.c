@@ -235,17 +235,37 @@ int vhsakmt_init_host_blob(vhsakmt_device_handle dev, size_t size, uint32_t blob
   return 0;
 }
 
-static int vhsakmt_init_userptr_blob(vhsakmt_device_handle dev, void* addr, size_t size,
+/* Aggregated entry parameters for the SVM/userptr blob registration path.
+ * Threads the UMD-level HsaMemFlags down to virtio blob creation so the guest
+ * kernel can pin read-only registrations read-only (no FOLL_FORCE / CoW break),
+ * which avoids copy-on-write memory doubling and the slow per-page pin. */
+struct vhsakmt_svm_map_params {
+  void* addr;             /* original guest VA to register */
+  size_t size;            /* original size in bytes */
+  bool use_svm;           /* dev->use_svm: SVM vs legacy USERPTR path */
+  bool read_only;         /* derived from HsaMemFlags.ui32.ReadOnly */
+  HsaMemFlags mem_flags;  /* full UMD flags, carried for future use */
+};
+
+static int vhsakmt_init_userptr_blob(vhsakmt_device_handle dev,
+                                     const struct vhsakmt_svm_map_params* p,
+                                     void* addr, size_t size,
                                      vhsakmt_bo_handle* bo_handle, uint64_t* offset) {
   int r;
+  uint32_t blob_flags = p->use_svm ? VIRTGPU_BLOB_FLAG_USE_SVM
+                                   : VIRTGPU_BLOB_FLAG_USE_USERPTR;
+  /* Read-only registrations can be pinned read-only in the guest kernel via a
+   * dedicated SVM flag; the legacy userptr path is left unchanged. */
+  if (p->use_svm && p->read_only)
+    blob_flags |= VIRTGPU_BLOB_FLAG_SVM_RDONLY;
+
   struct drm_virtgpu_resource_create_blob args = {
       .blob_mem = VIRTGPU_BLOB_MEM_HOST3D_GUEST,
-      .blob_flags = dev->use_svm ? VIRTGPU_BLOB_FLAG_USE_SVM
-                                 : VIRTGPU_BLOB_FLAG_USE_USERPTR,
+      .blob_flags = blob_flags,
       .size = size,
       .blob_id = vhsakmt_atomic_inc_return(&dev->next_blob_id),
   };
-  if (dev->use_svm)
+  if (p->use_svm)
     args.blob_svm = (uint64_t)addr;
   else
     args.blob_userptr = (uint64_t)addr;
@@ -671,8 +691,11 @@ static int vhsakmt_map_userptr(vhsakmt_device_handle dev, void* addr, size_t siz
   return rsp->ret;
 }
 
-static vhsakmt_bo_handle vhsakmt_map_to_gpu(void* addr, size_t size, bool use_svm) {
+static vhsakmt_bo_handle vhsakmt_map_to_gpu(const struct vhsakmt_svm_map_params* p) {
   vhsakmt_device_handle dev = vhsakmt_dev();
+  void* addr = p->addr;
+  size_t size = p->size;
+  bool use_svm = p->use_svm;
   size_t page_size = getpagesize();
   size_t addr_offset = (uint64_t)addr % page_size;
   void* blob_addr;
@@ -693,7 +716,7 @@ static vhsakmt_bo_handle vhsakmt_map_to_gpu(void* addr, size_t size, bool use_sv
   vhsa_debug("%s: addr: %p, size: 0x%lx, offset: 0x%lx, blob_addr: %p, blob_size: 0x%lx, svm: %d\n",
              __FUNCTION__, addr, size, addr_offset, blob_addr, blob_size, use_svm);
 
-  r_init = vhsakmt_init_userptr_blob(dev, blob_addr, blob_size, &userptr, &userptr_offset);
+  r_init = vhsakmt_init_userptr_blob(dev, p, blob_addr, blob_size, &userptr, &userptr_offset);
   if (r_init < 0) {
     vhsa_debug("%s: userptr create failed at address: %p, ret = %d\n", __FUNCTION__, addr, r_init);
     return NULL;
@@ -766,7 +789,14 @@ HSAKMT_STATUS HSAKMTAPI vhsaKmtRegisterMemoryWithFlags(void* MemoryAddress,
     }
   }
 
-  userptr = vhsakmt_map_to_gpu(MemoryAddress, MemorySizeInBytes, dev->use_svm);
+  struct vhsakmt_svm_map_params map_params = {
+      .addr = MemoryAddress,
+      .size = MemorySizeInBytes,
+      .use_svm = dev->use_svm,
+      .read_only = MemFlags.ui32.ReadOnly,
+      .mem_flags = MemFlags,
+  };
+  userptr = vhsakmt_map_to_gpu(&map_params);
 
   if (!userptr) {
     vhsa_debug(
