@@ -403,6 +403,9 @@ public:
 class Vop1 : public IsaInstruction<Isa> {
 public:
   Vop1(std::string_view mnemonic, const Vop1MachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
   void build_modifiers(std::string &out) const override;
   void implicit_uses(RegisterSet &uses) const override;
   bool default_encoding();
@@ -435,6 +438,9 @@ public:
 class Vopc : public IsaInstruction<Isa> {
 public:
   Vopc(std::string_view mnemonic, const VopcMachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
   void build_modifiers(std::string &out) const override;
   bool default_encoding();
   bool has_lit();
@@ -465,6 +471,9 @@ public:
 class Vop2 : public IsaInstruction<Isa> {
 public:
   Vop2(std::string_view mnemonic, const Vop2MachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
   void build_modifiers(std::string &out) const override;
   void implicit_uses(RegisterSet &uses) const override;
   bool default_encoding();
@@ -499,8 +508,14 @@ public:
 class Vop3 : public IsaInstruction<Isa> {
 public:
   Vop3(std::string_view mnemonic, const Vop3MachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
+  bool displays_vop3_op_sel() const;
   void build_modifiers(std::string &out) const override;
   void implicit_uses(RegisterSet &uses) const override;
+  void append_src_operand(std::string &out, uint8_t operand_index) const override;
+  void append_dst_operand(std::string &out, uint8_t operand_index) const override;
   bool has_lit_0();
   bool has_lit_1();
   bool has_lit_0_has_lit_1();
@@ -525,6 +540,9 @@ public:
 class Vop3p : public IsaInstruction<Isa> {
 public:
   Vop3p(std::string_view mnemonic, const Vop3pMachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
   void build_modifiers(std::string &out) const override;
   void implicit_uses(RegisterSet &uses) const override;
   bool has_lit_0();
@@ -614,6 +632,9 @@ public:
 class Vop3SdstEnc : public IsaInstruction<Isa> {
 public:
   Vop3SdstEnc(std::string_view mnemonic, const Vop3SdstEncMachineInst *inst, ExecuteFn exec_fn);
+  bool supports_dpp_opcode() const;
+  bool has_encoded_dpp() const;
+  bool has_encoded_dpp8() const;
   void build_modifiers(std::string &out) const override;
   void implicit_uses(RegisterSet &uses) const override;
   bool has_lit_0();

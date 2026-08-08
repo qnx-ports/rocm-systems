@@ -54,6 +54,13 @@ class MemoryCoherencyModel(Enum):
     GFX12_SCOPE_TH = auto()  # RDNA4 — 2-bit SCOPE + TH hint
 
 
+class DppCtrlDialect(Enum):
+    """Names and validity rules for DPP_CTRL values."""
+
+    GFX9 = auto()
+    GFX10_PLUS = auto()
+
+
 @dataclass
 class EncodingModifier:
     """A disassembly modifier to append to an encoding's mnemonic output.
@@ -307,6 +314,21 @@ class IsaProfile(ABC):
     def uses_true16_vop3_opsel(self) -> bool:
         """True when VOP3 16-bit operands use op_sel half selectors."""
         return False
+
+    @property
+    def renders_true16_vop3_operands(self) -> bool:
+        """True when VOP3 operands use explicit ``.l``/``.h`` suffixes."""
+        return False
+
+    @property
+    def vop3_opsel_omissions(self) -> frozenset[str]:
+        """VOP3 instructions whose half selection is shown only on operands."""
+        return frozenset()
+
+    @property
+    def dpp_ctrl_dialect(self) -> DppCtrlDialect:
+        """DPP_CTRL naming and validity rules for this ISA."""
+        return DppCtrlDialect.GFX9
 
     @property
     def scalar_null_precedes_m0(self) -> bool:
@@ -667,6 +689,7 @@ _FLAT_MODIFIERS_GLC_DLC = [
 
 # GFX12 (RDNA4): SCOPE+TH model; flag modifier is NV only.
 _SMEM_MODIFIERS_RDNA4 = [
+    EncodingModifier('__gfx12_cache_policy__'),
     EncodingModifier('nv'),
 ]
 
@@ -674,10 +697,12 @@ _VBUFFER_MODIFIERS_RDNA4 = [
     EncodingModifier('offen'),
     EncodingModifier('idxen'),
     EncodingModifier('ioffset', is_offset=True),
+    EncodingModifier('__gfx12_cache_policy__'),
     EncodingModifier('nv'),
 ]
 
 _VFLAT_MODIFIERS_RDNA4 = [
+    EncodingModifier('__gfx12_cache_policy__'),
     EncodingModifier('nv'),
 ]
 
@@ -974,6 +999,11 @@ class _AmdgpuProfileBase(IsaProfile):
         return ('op_sel', 'op_sel_hi')
 
     @property
+    def vop3_opsel_field(self) -> str:
+        """Return the source and destination half-selector field for VOP3."""
+        return 'op_sel'
+
+    @property
     def smem_direct_offset_field(self) -> str | None:
         """Field name of the direct SMEM immediate offset, or ``None``.
 
@@ -1247,6 +1277,10 @@ class Rdna1Profile(_AmdgpuProfileBase):
     _SKIP_DPP_SDWA = True
 
     @property
+    def dpp_ctrl_dialect(self) -> DppCtrlDialect:
+        return DppCtrlDialect.GFX10_PLUS
+
+    @property
     def waitcnt_lgkmcnt_mask(self) -> str:
         # RDNA1/2 uses a 6-bit lgkmcnt field at bits [13:8].
         return '0x3F'
@@ -1445,6 +1479,18 @@ class Rdna3Profile(_AmdgpuProfileBase):
         return True
 
     @property
+    def renders_true16_vop3_operands(self) -> bool:
+        return True
+
+    @property
+    def vop3_opsel_omissions(self) -> frozenset[str]:
+        return frozenset({'V_CNDMASK_B16'})
+
+    @property
+    def dpp_ctrl_dialect(self) -> DppCtrlDialect:
+        return DppCtrlDialect.GFX10_PLUS
+
+    @property
     def smem_direct_offset_field(self) -> str | None:
         return 'offset'
 
@@ -1586,6 +1632,18 @@ class Rdna4Profile(_AmdgpuProfileBase):
     def uses_true16_vop3_opsel(self) -> bool:
         return True
 
+    @property
+    def renders_true16_vop3_operands(self) -> bool:
+        return True
+
+    @property
+    def vop3_opsel_omissions(self) -> frozenset[str]:
+        return frozenset({'V_CNDMASK_B16'})
+
+    @property
+    def dpp_ctrl_dialect(self) -> DppCtrlDialect:
+        return DppCtrlDialect.GFX10_PLUS
+
     def mnemonic_rule(self, enc_name: str) -> MnemonicRule:
         """RDNA4 mnemonic rules.
 
@@ -1613,6 +1671,10 @@ class Rdna4Profile(_AmdgpuProfileBase):
     @property
     def vop3p_opsel_fields(self) -> tuple[str, str]:
         return ('opsel', 'opsel_hi')
+
+    @property
+    def vop3_opsel_field(self) -> str:
+        return 'opsel'
 
     @property
     def smem_direct_offset_field(self) -> str | None:

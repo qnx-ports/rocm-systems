@@ -2023,8 +2023,8 @@ def test_gfx1250_generated_vop3_add_f16_applies_dpp(
     assert 'std::array<uint32_t, 3> raw_words_{};' in vop3_base
 
     vop3_encoding_ctor = _generated_constructor_body(encodings_cpp, 'Vop3')
-    assert 'inst_.src0 == amdgpu::SRC_DPP' in vop3_encoding_ctor
-    assert 'amdgpu::dpp::is_src_dpp8(inst_.src0)' in vop3_encoding_ctor
+    assert 'has_encoded_dpp()' in vop3_encoding_ctor
+    assert 'has_encoded_dpp8()' in vop3_encoding_ctor
     assert 'DPP and literal operands cannot be combined' in vop3_encoding_ctor
     assert vop3_encoding_ctor.index('DPP and literal operands cannot be combined') < (
         vop3_encoding_ctor.index('std::memcpy(raw_words_.data(), inst, size_);')
@@ -2104,13 +2104,66 @@ def test_generated_sendmsg_return_selectors_are_not_literals(
         assert 'OperandType::OPR_SIMM64' not in sendmsg_ctor
 
 
-def test_generated_dpp8_disassembly_uses_encoding_state(
+def test_generated_dpp_disassembly_uses_encoding_state(
     amdgpu_generated_root: Path,
 ) -> None:
+    for arch in ('cdna1', 'cdna2', 'cdna3', 'cdna4'):
+        encodings_cpp = (amdgpu_generated_root / arch / 'encodings.cpp').read_text()
+        assert 'amdgpu::dpp::dpp_mnemonic' in encodings_cpp
+        assert 'append_dpp16_disassembly' in encodings_cpp
+        assert 'dpp_bound_ctrl_, dpp_fi_, false,' in encodings_cpp
+        assert 'amdgpu::dpp::DppCtrlDialect::Gfx9' in encodings_cpp
+
     for arch in ('rdna1', 'rdna2', 'rdna3', 'rdna3_5', 'rdna4', 'gfx1250'):
         encodings_cpp = (amdgpu_generated_root / arch / 'encodings.cpp').read_text()
-        assert 'dpp8_mnemonic' in encodings_cpp
+        assert 'amdgpu::dpp::dpp_mnemonic' in encodings_cpp
+        assert 'append_dpp16_disassembly' in encodings_cpp
+        assert 'dpp_bound_ctrl_, dpp_fi_, true,' in encodings_cpp
+        assert 'amdgpu::dpp::DppCtrlDialect::Gfx10Plus' in encodings_cpp
         assert 'append_dpp8_disassembly' in encodings_cpp
+
+
+@pytest.mark.parametrize('arch', ['cdna4', 'rdna4'])
+def test_generated_vop3p_disassembly_uses_encoding_state(
+    amdgpu_generated_root: Path,
+    arch: str,
+) -> None:
+    encodings_cpp = (amdgpu_generated_root / arch / 'encodings.cpp').read_text()
+    start = encodings_cpp.index('void Vop3p::build_modifiers')
+    vop3p_modifiers = encodings_cpp[start : start + 1000]
+    assert 'append_vop3p_disassembly' in vop3p_modifiers
+    assert 'num_src_operands()' in vop3p_modifiers
+
+
+@pytest.mark.parametrize('arch', ['cdna4', 'rdna4'])
+def test_generated_vop3_disassembly_uses_encoding_state(
+    amdgpu_generated_root: Path,
+    arch: str,
+) -> None:
+    encodings_cpp = (amdgpu_generated_root / arch / 'encodings.cpp').read_text()
+    start = encodings_cpp.index('void Vop3::build_modifiers')
+    vop3_modifiers = encodings_cpp[start : start + 1000]
+    assert 'append_vop3_disassembly' in vop3_modifiers
+    assert 'num_src_operands()' in vop3_modifiers
+    assert 'displays_vop3_op_sel()' in vop3_modifiers
+    assert 'mnemonic_' not in vop3_modifiers
+    assert 'void Vop3::append_src_operand' in encodings_cpp
+    assert 'append_vop3_operand' in encodings_cpp
+
+
+@pytest.mark.parametrize('arch', ['rdna4', 'gfx1250'])
+def test_gfx12_generated_cache_policy_disassembly(
+    amdgpu_generated_root: Path,
+    arch: str,
+) -> None:
+    encodings = (amdgpu_generated_root / arch / 'encodings.cpp').read_text()
+    assert '#include "rocjitsu/isa/arch/amdgpu/shared/gfx12_cache_flags.h"' in encodings
+    assert 'amdgpu::Gfx12TemporalHintKind::Atomic' in encodings
+    assert 'amdgpu::Gfx12TemporalHintKind::Store' in encodings
+    assert (
+        'amdgpu::append_gfx12_cache_policy(out, inst->th, inst->scope, hint_kind);'
+        in encodings
+    )
 
 
 def test_generated_sdwa_uses_shared_source_staging(
@@ -2214,11 +2267,11 @@ def test_generated_dpp_encodings_own_extension_words(
             class_name,
         )
         if class_name in ('Vop3', 'Vop3p', 'Vop3SdstEnc'):
-            assert 'inst_.src0 == amdgpu::SRC_DPP' in constructor, (
+            assert 'has_encoded_dpp()' in constructor, (
                 arch,
                 class_name,
             )
-            assert 'amdgpu::dpp::is_src_dpp8(inst_.src0)' in constructor, (
+            assert 'has_encoded_dpp8()' in constructor, (
                 arch,
                 class_name,
             )
