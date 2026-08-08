@@ -2135,6 +2135,10 @@ def test_gfx1250_generated_vop3_add_f16_applies_dpp(
     vop3_encoding_ctor = _generated_constructor_body(encodings_cpp, 'Vop3')
     assert 'inst_.src0 == amdgpu::SRC_DPP' in vop3_encoding_ctor
     assert 'amdgpu::dpp::is_src_dpp8(inst_.src0)' in vop3_encoding_ctor
+    assert 'DPP and literal operands cannot be combined' in vop3_encoding_ctor
+    assert vop3_encoding_ctor.index('DPP and literal operands cannot be combined') < (
+        vop3_encoding_ctor.index('std::memcpy(raw_words_.data(), inst, size_);')
+    )
     assert 'size_ += sizeof(MachineInst);' in vop3_encoding_ctor
     assert 'std::memcpy(raw_words_.data(), inst, size_);' in vop3_encoding_ctor
     assert 'raw_encoding_ = raw_words_.data();' in vop3_encoding_ctor
@@ -2151,6 +2155,93 @@ def test_gfx1250_generated_vop3_add_f16_applies_dpp(
     assert 'ScopedOperandDelegate dpp_src0_binding_(src0, dpp_src0_.get());' in body
     assert 'src0.set_delegate(' not in body
     assert 'src0.clear_delegate();' not in body
+
+
+def test_gfx1250_generated_vop3_rejects_literal64_selectors(
+    gfx1250_generated_root: Path,
+):
+    vop1 = (gfx1250_generated_root / 'vop1.cpp').read_text()
+    vop3_alu = (gfx1250_generated_root / 'vop3_alu.cpp').read_text()
+    vop3p = (gfx1250_generated_root / 'vop3p.cpp').read_text()
+
+    vop1_ctor = _generated_constructor_body(vop1, 'VSqrtF16Vop1')
+    assert 'src0 == 254' in vop1_ctor
+    assert 'OperandType::OPR_SIMM64' in vop1_ctor
+
+    vop3_ctor = _generated_constructor_body(vop3_alu, 'VSqrtF16Vop3')
+    assert 'LiteralSupport::Literal32, 1' in vop3_ctor
+    assert 'OperandType::OPR_SIMM64' not in vop3_ctor
+
+    vop3p_ctor = _generated_constructor_body(vop3p, 'VFmaMixF32Vop3p')
+    assert 'LiteralSupport::Literal32' in vop3p_ctor
+    assert 'OperandType::OPR_SIMM64' not in vop3p_ctor
+
+
+def test_gfx1250_generated_literal_validation(gfx1250_generated_root: Path):
+    encodings = (gfx1250_generated_root / 'encodings.cpp').read_text()
+    sop1 = (gfx1250_generated_root / 'sop1.cpp').read_text()
+    sop2 = (gfx1250_generated_root / 'sop2.cpp').read_text()
+    vopd = (gfx1250_generated_root / 'vopd.cpp').read_text()
+
+    sop1_encoding_ctor = _generated_constructor_body(encodings, 'Sop1')
+    assert 'inst_.op != 76 && inst_.op != 77' in sop1_encoding_ctor
+
+    barrier_ctor = _generated_constructor_body(sop1, 'SBarrierSignalSop1')
+    assert 'LiteralSupport::None' in barrier_ctor
+    assert 'OperandType::OPR_SIMM32' not in barrier_ctor
+    assert 'OperandType::OPR_SIMM64' not in barrier_ctor
+
+    sop2_ctor = _generated_constructor_body(sop2, 'SAddCoU32Sop2')
+    assert 'may not mix 32-bit and 64-bit literals' in sop2_ctor
+    assert vopd.count('VOPD does not support 64-bit literals') == 1
+    assert 'srcx0 == 254 || srcx0 == 255 || srcy0 == 254 || srcy0 == 255' in vopd
+    assert 'VOPD3 does not support literal selectors' in vopd
+
+
+@pytest.mark.parametrize('arch', ['rdna3', 'gfx1250'])
+def test_generated_sendmsg_return_selectors_are_not_literals(
+    amdgpu_generated_root: Path,
+    arch: str,
+):
+    generated_root = amdgpu_generated_root / arch
+    encodings = (generated_root / 'encodings.cpp').read_text()
+    sop1 = (generated_root / 'sop1.cpp').read_text()
+
+    sop1_encoding_ctor = _generated_constructor_body(encodings, 'Sop1')
+    assert 'inst_.op != 76 && inst_.op != 77' in sop1_encoding_ctor
+
+    for class_name in ('SSendmsgRtnB32Sop1', 'SSendmsgRtnB64Sop1'):
+        sendmsg_ctor = _generated_constructor_body(sop1, class_name)
+        assert 'OperandType::OPR_SIMM32' not in sendmsg_ctor
+        assert 'OperandType::OPR_SIMM64' not in sendmsg_ctor
+        if arch == 'gfx1250':
+            assert 'LiteralSupport::None, 0' in sendmsg_ctor
+
+
+def test_gfx1250_compact_literal_policy_precedes_extension_sizing(
+    gfx1250_generated_root: Path,
+):
+    encodings_h = (gfx1250_generated_root / 'encodings.h').read_text()
+    encodings_cpp = (gfx1250_generated_root / 'encodings.cpp').read_text()
+    vop1 = (gfx1250_generated_root / 'vop1.cpp').read_text()
+    vop2 = (gfx1250_generated_root / 'vop2.cpp').read_text()
+
+    assert 'enum class LiteralSupport : uint8_t' in encodings_h
+    assert 'LiteralSupport::Both' in encodings_h
+
+    for class_name in ('Vop1', 'Vop2', 'Vopc'):
+        body = _generated_constructor_body(encodings_cpp, class_name)
+        assert 'supports_literal(literal_support, LiteralSupport::Literal32)' in body
+        assert 'supports_literal(literal_support, LiteralSupport::Literal64)' in body
+        assert body.index('supports_literal(') < body.index('if (has_lit64()')
+
+    readfirstlane = _generated_constructor_body(vop1, 'VReadfirstlaneB32Vop1')
+    assert 'LiteralSupport::None' in readfirstlane
+
+    fmamk_f64 = _generated_constructor_body(vop2, 'VFmamkF64Vop2')
+    assert 'LiteralSupport::Literal64' in fmamk_f64
+    fmamk_f32 = _generated_constructor_body(vop2, 'VFmamkF32Vop2')
+    assert 'LiteralSupport::Literal32' in fmamk_f32
 
 
 def test_generated_sdwa_uses_shared_source_staging(
@@ -2515,9 +2606,13 @@ def test_gfx1250_vop3p_rejects_unencoded_literal64_selectors(
 
     for class_name in ('VPkAddF32Vop3p', 'VPkMulF32Vop3p'):
         body = _generated_constructor_body(vop3p, class_name)
-        assert re.search(r'selected_exec_fn\(\d+\), 2\)', body)
+        assert re.search(
+            r'selected_exec_fn\(\d+\),\s+LiteralSupport::Literal32, 2\)', body
+        )
     fma_body = _generated_constructor_body(vop3p, 'VPkFmaF32Vop3p')
-    assert re.search(r'selected_exec_fn\(\d+\)\)', fma_body)
+    assert re.search(
+        r'selected_exec_fn\(\d+\),\s+LiteralSupport::Literal32\)', fma_body
+    )
 
 
 def test_generated_vop_execution_has_no_instruction_storage_bypass(
@@ -2960,7 +3055,8 @@ def test_gfx1250_helper_blocks_emit_scaled_wmma_table_decoder(
     )
     assert (
         'reinterpret_cast<const OpEncoding *>(inst + 2), '
-        'selected_exec_fn(0), 3, Vop3p::ExtensionDecodePolicy::Skip),'
+        'selected_exec_fn(0), LiteralSupport::Both, 3, '
+        'Vop3p::ExtensionDecodePolicy::Skip),'
     ) in model_impl
 
     helpers = codegen._emit_gfx1250_scaled_wmma_vop3px2_decoder_helpers()
@@ -3045,7 +3141,10 @@ def test_gfx1250_scaled_wmma_skips_vop3p_extension_decode(
     ):
         assert extension_step in guarded_body
 
-    assert 'selected_exec_fn(1250), 3, Vop3p::ExtensionDecodePolicy::Skip)' in vop3p_cpp
+    assert (
+        'selected_exec_fn(1250), LiteralSupport::Both, 3, '
+        'Vop3p::ExtensionDecodePolicy::Skip)'
+    ) in vop3p_cpp
 
 
 @pytest.mark.parametrize(
