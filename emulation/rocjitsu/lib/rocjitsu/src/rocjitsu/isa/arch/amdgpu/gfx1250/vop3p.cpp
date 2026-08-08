@@ -1627,14 +1627,6 @@ VWmmaF3216x16x128F8f6f4Vop3p::VWmmaF3216x16x128F8f6f4Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_F8F6F4 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_F8F6F4 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X128_F8F6F4 does not support DPP", "");
@@ -1999,14 +1991,6 @@ VWmmaF3216x16x4F32Vop3p::VWmmaF3216x16x4F32Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X4_F32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X4_F32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X4_F32 does not support DPP", "");
@@ -2030,14 +2014,6 @@ VWmmaF3216x16x32F16Vop3p::VWmmaF3216x16x32F16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X32_F16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X32_F16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X32_F16 does not support DPP", "");
@@ -2061,14 +2037,6 @@ VWmmaF1616x16x32F16Vop3p::VWmmaF1616x16x32F16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X32_F16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X32_F16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X32_F16 does not support DPP", "");
@@ -2092,14 +2060,6 @@ VWmmaF3216x16x32Bf16Vop3p::VWmmaF3216x16x32Bf16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X32_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X32_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X32_BF16 does not support DPP", "");
@@ -2123,14 +2083,6 @@ VWmmaBf1616x16x32Bf16Vop3p::VWmmaBf1616x16x32Bf16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_BF16_16X16X32_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_BF16_16X16X32_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_BF16_16X16X32_BF16 does not support DPP", "");
@@ -2154,14 +2106,6 @@ VWmmaBf16f3216x16x32Bf16Vop3p::VWmmaBf16f3216x16x32Bf16Vop3p(const MachineInst *
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_BF16F32_16X16X32_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_BF16F32_16X16X32_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_BF16F32_16X16X32_BF16 does not support DPP", "");
@@ -2184,14 +2128,6 @@ VSwmmacF3216x16x64F16Vop3p::VSwmmacF3216x16x64F16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X64_F16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X64_F16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X64_F16 does not support DPP", "");
@@ -2223,14 +2159,6 @@ VSwmmacF3216x16x64Bf16Vop3p::VSwmmacF3216x16x64Bf16Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X64_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X64_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X64_BF16 does not support DPP", "");
@@ -2262,14 +2190,6 @@ VSwmmacF1616x16x64F16Vop3p::VSwmmacF1616x16x64F16Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X64_F16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X64_F16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F16_16X16X64_F16 does not support DPP", "");
@@ -2301,14 +2221,6 @@ VSwmmacBf1616x16x64Bf16Vop3p::VSwmmacBf1616x16x64Bf16Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_BF16_16X16X64_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_BF16_16X16X64_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_BF16_16X16X64_BF16 does not support DPP", "");
@@ -2340,14 +2252,6 @@ VSwmmacBf16f3216x16x64Bf16Vop3p::VSwmmacBf16f3216x16x64Bf16Vop3p(const MachineIn
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_BF16F32_16X16X64_BF16 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_BF16F32_16X16X64_BF16 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_BF16F32_16X16X64_BF16 does not support DPP", "");
@@ -2380,14 +2284,6 @@ VWmmaF3216x16x64Fp8Fp8Vop3p::VWmmaF3216x16x64Fp8Fp8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_FP8 does not support DPP", "");
@@ -2411,14 +2307,6 @@ VWmmaF3216x16x64Fp8Bf8Vop3p::VWmmaF3216x16x64Fp8Bf8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X64_FP8_BF8 does not support DPP", "");
@@ -2442,14 +2330,6 @@ VWmmaF3216x16x64Bf8Fp8Vop3p::VWmmaF3216x16x64Bf8Fp8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_FP8 does not support DPP", "");
@@ -2473,14 +2353,6 @@ VWmmaF3216x16x64Bf8Bf8Vop3p::VWmmaF3216x16x64Bf8Bf8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X64_BF8_BF8 does not support DPP", "");
@@ -2504,14 +2376,6 @@ VWmmaF1616x16x64Fp8Fp8Vop3p::VWmmaF1616x16x64Fp8Fp8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_FP8 does not support DPP", "");
@@ -2535,14 +2399,6 @@ VWmmaF1616x16x64Fp8Bf8Vop3p::VWmmaF1616x16x64Fp8Bf8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X64_FP8_BF8 does not support DPP", "");
@@ -2566,14 +2422,6 @@ VWmmaF1616x16x64Bf8Fp8Vop3p::VWmmaF1616x16x64Bf8Fp8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_FP8 does not support DPP", "");
@@ -2597,14 +2445,6 @@ VWmmaF1616x16x64Bf8Bf8Vop3p::VWmmaF1616x16x64Bf8Bf8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X64_BF8_BF8 does not support DPP", "");
@@ -2628,14 +2468,6 @@ VWmmaI3216x16x64Iu8Vop3p::VWmmaI3216x16x64Iu8Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_I32_16X16X64_IU8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_I32_16X16X64_IU8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_I32_16X16X64_IU8 does not support DPP", "");
@@ -2658,14 +2490,6 @@ VSwmmacF3216x16x128Fp8Fp8Vop3p::VSwmmacF3216x16x128Fp8Fp8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_FP8 does not support DPP", "");
@@ -2697,14 +2521,6 @@ VSwmmacF3216x16x128Fp8Bf8Vop3p::VSwmmacF3216x16x128Fp8Bf8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X128_FP8_BF8 does not support DPP", "");
@@ -2736,14 +2552,6 @@ VSwmmacF3216x16x128Bf8Fp8Vop3p::VSwmmacF3216x16x128Bf8Fp8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_FP8 does not support DPP", "");
@@ -2775,14 +2583,6 @@ VSwmmacF3216x16x128Bf8Bf8Vop3p::VSwmmacF3216x16x128Bf8Bf8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F32_16X16X128_BF8_BF8 does not support DPP", "");
@@ -2814,14 +2614,6 @@ VSwmmacF1616x16x128Fp8Fp8Vop3p::VSwmmacF1616x16x128Fp8Fp8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_FP8 does not support DPP", "");
@@ -2853,14 +2645,6 @@ VSwmmacF1616x16x128Fp8Bf8Vop3p::VSwmmacF1616x16x128Fp8Bf8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F16_16X16X128_FP8_BF8 does not support DPP", "");
@@ -2892,14 +2676,6 @@ VSwmmacF1616x16x128Bf8Fp8Vop3p::VSwmmacF1616x16x128Bf8Fp8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_FP8 does not support DPP", "");
@@ -2931,14 +2707,6 @@ VSwmmacF1616x16x128Bf8Bf8Vop3p::VSwmmacF1616x16x128Bf8Bf8Vop3p(const MachineInst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_F16_16X16X128_BF8_BF8 does not support DPP", "");
@@ -2970,14 +2738,6 @@ VSwmmacI3216x16x128Iu8Vop3p::VSwmmacI3216x16x128Iu8Vop3p(const MachineInst *inst
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_SWMMAC_I32_16X16X128_IU8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_SWMMAC_I32_16X16X128_IU8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_SWMMAC_I32_16X16X128_IU8 does not support DPP", "");
@@ -3010,14 +2770,6 @@ VWmmaF3216x16x128Fp8Fp8Vop3p::VWmmaF3216x16x128Fp8Fp8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_FP8 does not support DPP", "");
@@ -3041,14 +2793,6 @@ VWmmaF3216x16x128Fp8Bf8Vop3p::VWmmaF3216x16x128Fp8Bf8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X128_FP8_BF8 does not support DPP", "");
@@ -3072,14 +2816,6 @@ VWmmaF3216x16x128Bf8Fp8Vop3p::VWmmaF3216x16x128Bf8Fp8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_FP8 does not support DPP", "");
@@ -3103,14 +2839,6 @@ VWmmaF3216x16x128Bf8Bf8Vop3p::VWmmaF3216x16x128Bf8Bf8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_16X16X128_BF8_BF8 does not support DPP", "");
@@ -3134,14 +2862,6 @@ VWmmaF1616x16x128Fp8Fp8Vop3p::VWmmaF1616x16x128Fp8Fp8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_FP8 does not support DPP", "");
@@ -3165,14 +2885,6 @@ VWmmaF1616x16x128Fp8Bf8Vop3p::VWmmaF1616x16x128Fp8Bf8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X128_FP8_BF8 does not support DPP", "");
@@ -3196,14 +2908,6 @@ VWmmaF1616x16x128Bf8Fp8Vop3p::VWmmaF1616x16x128Bf8Fp8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_FP8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_FP8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_FP8 does not support DPP", "");
@@ -3227,14 +2931,6 @@ VWmmaF1616x16x128Bf8Bf8Vop3p::VWmmaF1616x16x128Bf8Bf8Vop3p(const MachineInst *in
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_BF8 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_BF8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F16_16X16X128_BF8_BF8 does not support DPP", "");
@@ -3258,14 +2954,6 @@ VWmmaF3232x16x128F4Vop3p::VWmmaF3232x16x128F4Vop3p(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    throw util::InvalidInst("V_WMMA_F32_32X16X128_F4 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
-    throw util::InvalidInst("V_WMMA_F32_32X16X128_F4 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_WMMA_F32_32X16X128_F4 does not support DPP", "");

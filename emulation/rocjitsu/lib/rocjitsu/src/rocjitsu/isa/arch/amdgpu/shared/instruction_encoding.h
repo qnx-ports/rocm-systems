@@ -89,6 +89,17 @@ inline void append_dpp8_disassembly(std::string &out, uint32_t lane_sel, uint32_
 
 namespace sdwa {
 
+/// @brief Return the SDWA spelling of a compact VOP mnemonic.
+inline std::string sdwa_mnemonic(std::string_view compact_mnemonic) {
+  std::string result(compact_mnemonic);
+  constexpr std::string_view e32_suffix = "_e32";
+  if (result.ends_with(e32_suffix))
+    result.replace(result.size() - e32_suffix.size(), e32_suffix.size(), "_sdwa");
+  else
+    result += "_sdwa";
+  return result;
+}
+
 /// @brief SDWA sub-dword selection values stored by VOP encoding models.
 enum SdwaSel : uint32_t {
   BYTE_0 = 0,

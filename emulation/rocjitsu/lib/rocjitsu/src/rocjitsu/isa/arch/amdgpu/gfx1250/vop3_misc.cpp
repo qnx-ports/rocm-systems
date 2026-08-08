@@ -33,10 +33,6 @@ VMovrelsdB32Vop3::VMovrelsdB32Vop3(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    throw util::InvalidInst("V_MOVRELSD_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
-    throw util::InvalidInst("V_MOVRELSD_B32 does not support SRC_LITERAL64", "");
   if (amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0)) {
     auto *dp8 = reinterpret_cast<const Vop3VopDpp8MachineInst *>(inst);
     src0 = Operand(32, OperandType::OPR_VGPR, dp8->vsrc0);
@@ -69,10 +65,6 @@ VMovrelsd2B32Vop3::VMovrelsd2B32Vop3(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    throw util::InvalidInst("V_MOVRELSD_2_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
-    throw util::InvalidInst("V_MOVRELSD_2_B32 does not support SRC_LITERAL64", "");
   if (amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0)) {
     auto *dp8 = reinterpret_cast<const Vop3VopDpp8MachineInst *>(inst);
     src0 = Operand(32, OperandType::OPR_VGPR, dp8->vsrc0);
@@ -419,13 +411,8 @@ VMqsadU32U8Vop3::VMqsadU32U8Vop3(const MachineInst *inst)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    src2 = Operand(
-        128, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
+      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
     throw util::InvalidInst("V_MQSAD_U32_U8 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))

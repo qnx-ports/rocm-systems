@@ -49,12 +49,19 @@ VCmpFF32Vopc::VCmpFF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpFF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -112,12 +119,19 @@ VCmpLtF32Vopc::VCmpLtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -175,12 +189,19 @@ VCmpEqF32Vopc::VCmpEqF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -238,12 +259,19 @@ VCmpLeF32Vopc::VCmpLeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -301,12 +329,19 @@ VCmpGtF32Vopc::VCmpGtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -364,12 +399,19 @@ VCmpLgF32Vopc::VCmpLgF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLgF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -427,12 +469,19 @@ VCmpGeF32Vopc::VCmpGeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -490,12 +539,19 @@ VCmpOF32Vopc::VCmpOF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpOF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -553,12 +609,19 @@ VCmpUF32Vopc::VCmpUF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpUF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -616,12 +679,19 @@ VCmpNgeF32Vopc::VCmpNgeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNgeF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -679,12 +749,19 @@ VCmpNlgF32Vopc::VCmpNlgF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNlgF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -742,12 +819,19 @@ VCmpNgtF32Vopc::VCmpNgtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNgtF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -805,12 +889,19 @@ VCmpNleF32Vopc::VCmpNleF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNleF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -868,12 +959,19 @@ VCmpNeqF32Vopc::VCmpNeqF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeqF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -931,12 +1029,19 @@ VCmpNltF32Vopc::VCmpNltF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNltF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -994,12 +1099,19 @@ VCmpTruF32Vopc::VCmpTruF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpTruF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -1059,12 +1171,19 @@ VCmpxFF32Vopc::VCmpxFF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1133,12 +1252,19 @@ VCmpxLtF32Vopc::VCmpxLtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1210,12 +1336,19 @@ VCmpxEqF32Vopc::VCmpxEqF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1287,12 +1420,19 @@ VCmpxLeF32Vopc::VCmpxLeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1364,12 +1504,19 @@ VCmpxGtF32Vopc::VCmpxGtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1441,12 +1588,19 @@ VCmpxLgF32Vopc::VCmpxLgF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1518,12 +1672,19 @@ VCmpxGeF32Vopc::VCmpxGeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1595,12 +1756,19 @@ VCmpxOF32Vopc::VCmpxOF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1672,12 +1840,19 @@ VCmpxUF32Vopc::VCmpxUF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1749,12 +1924,19 @@ VCmpxNgeF32Vopc::VCmpxNgeF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1826,12 +2008,19 @@ VCmpxNlgF32Vopc::VCmpxNlgF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1903,12 +2092,19 @@ VCmpxNgtF32Vopc::VCmpxNgtF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -1980,12 +2176,19 @@ VCmpxNleF32Vopc::VCmpxNleF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -2057,12 +2260,19 @@ VCmpxNeqF32Vopc::VCmpxNeqF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -2134,12 +2344,19 @@ VCmpxNltF32Vopc::VCmpxNltF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -2211,12 +2428,19 @@ VCmpxTruF32Vopc::VCmpxTruF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -3429,12 +3653,19 @@ VCmpFI32Vopc::VCmpFI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpFI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3492,12 +3723,19 @@ VCmpLtI32Vopc::VCmpLtI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3555,12 +3793,19 @@ VCmpEqI32Vopc::VCmpEqI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3618,12 +3863,19 @@ VCmpLeI32Vopc::VCmpLeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3681,12 +3933,19 @@ VCmpGtI32Vopc::VCmpGtI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3744,12 +4003,19 @@ VCmpNeI32Vopc::VCmpNeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3807,12 +4073,19 @@ VCmpGeI32Vopc::VCmpGeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3870,12 +4143,19 @@ VCmpTI32Vopc::VCmpTI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpTI32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3933,12 +4213,19 @@ VCmpClassF32Vopc::VCmpClassF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpClassF32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -3997,12 +4284,19 @@ VCmpLtI16Vopc::VCmpLtI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4061,12 +4355,19 @@ VCmpEqI16Vopc::VCmpEqI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4125,12 +4426,19 @@ VCmpLeI16Vopc::VCmpLeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4189,12 +4497,19 @@ VCmpGtI16Vopc::VCmpGtI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4253,12 +4568,19 @@ VCmpNeI16Vopc::VCmpNeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4317,12 +4639,19 @@ VCmpGeI16Vopc::VCmpGeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeI16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4381,12 +4710,19 @@ VCmpClassF16Vopc::VCmpClassF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpClassF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -4446,12 +4782,19 @@ VCmpxFI32Vopc::VCmpxFI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4520,12 +4863,19 @@ VCmpxLtI32Vopc::VCmpxLtI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4597,12 +4947,19 @@ VCmpxEqI32Vopc::VCmpxEqI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4674,12 +5031,19 @@ VCmpxLeI32Vopc::VCmpxLeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4751,12 +5115,19 @@ VCmpxGtI32Vopc::VCmpxGtI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4828,12 +5199,19 @@ VCmpxNeI32Vopc::VCmpxNeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4905,12 +5283,19 @@ VCmpxGeI32Vopc::VCmpxGeI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -4982,12 +5367,19 @@ VCmpxTI32Vopc::VCmpxTI32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5056,12 +5448,19 @@ VCmpxClassF32Vopc::VCmpxClassF32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F32;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5157,12 +5556,19 @@ VCmpxLtI16Vopc::VCmpxLtI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5235,12 +5641,19 @@ VCmpxEqI16Vopc::VCmpxEqI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5313,12 +5726,19 @@ VCmpxLeI16Vopc::VCmpxLeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5391,12 +5811,19 @@ VCmpxGtI16Vopc::VCmpxGtI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5469,12 +5896,19 @@ VCmpxNeI16Vopc::VCmpxNeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5547,12 +5981,19 @@ VCmpxGeI16Vopc::VCmpxGeI16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5625,12 +6066,19 @@ VCmpxClassF16Vopc::VCmpxClassF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -5975,12 +6423,19 @@ VCmpLtU16Vopc::VCmpLtU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6039,12 +6494,19 @@ VCmpEqU16Vopc::VCmpEqU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6103,12 +6565,19 @@ VCmpLeU16Vopc::VCmpLeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6167,12 +6636,19 @@ VCmpGtU16Vopc::VCmpGtU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6231,12 +6707,19 @@ VCmpNeU16Vopc::VCmpNeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6295,12 +6778,19 @@ VCmpGeU16Vopc::VCmpGeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeU16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -6751,12 +7241,19 @@ VCmpxLtU16Vopc::VCmpxLtU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -6829,12 +7326,19 @@ VCmpxEqU16Vopc::VCmpxEqU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -6907,12 +7411,19 @@ VCmpxLeU16Vopc::VCmpxLeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -6985,12 +7496,19 @@ VCmpxGtU16Vopc::VCmpxGtU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -7063,12 +7581,19 @@ VCmpxNeU16Vopc::VCmpxNeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -7141,12 +7666,19 @@ VCmpxGeU16Vopc::VCmpxGeU16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -7216,12 +7748,19 @@ VCmpFU32Vopc::VCmpFU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpFU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7279,12 +7818,19 @@ VCmpLtU32Vopc::VCmpLtU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7342,12 +7888,19 @@ VCmpEqU32Vopc::VCmpEqU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7405,12 +7958,19 @@ VCmpLeU32Vopc::VCmpLeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7468,12 +8028,19 @@ VCmpGtU32Vopc::VCmpGtU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7531,12 +8098,19 @@ VCmpNeU32Vopc::VCmpNeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7594,12 +8168,19 @@ VCmpGeU32Vopc::VCmpGeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7657,12 +8238,19 @@ VCmpTU32Vopc::VCmpTU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpTU32Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7721,12 +8309,19 @@ VCmpFF16Vopc::VCmpFF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpFF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7785,12 +8380,19 @@ VCmpLtF16Vopc::VCmpLtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLtF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7849,12 +8451,19 @@ VCmpEqF16Vopc::VCmpEqF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpEqF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7913,12 +8522,19 @@ VCmpLeF16Vopc::VCmpLeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLeF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -7977,12 +8593,19 @@ VCmpGtF16Vopc::VCmpGtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGtF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -8041,12 +8664,19 @@ VCmpLgF16Vopc::VCmpLgF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpLgF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -8105,12 +8735,19 @@ VCmpGeF16Vopc::VCmpGeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpGeF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -8169,12 +8806,19 @@ VCmpOF16Vopc::VCmpOF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpOF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -8234,12 +8878,19 @@ VCmpxFU32Vopc::VCmpxFU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8308,12 +8959,19 @@ VCmpxLtU32Vopc::VCmpxLtU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8385,12 +9043,19 @@ VCmpxEqU32Vopc::VCmpxEqU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8462,12 +9127,19 @@ VCmpxLeU32Vopc::VCmpxLeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8539,12 +9211,19 @@ VCmpxGtU32Vopc::VCmpxGtU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8616,12 +9295,19 @@ VCmpxNeU32Vopc::VCmpxNeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8693,12 +9379,19 @@ VCmpxGeU32Vopc::VCmpxGeU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8770,12 +9463,19 @@ VCmpxTU32Vopc::VCmpxTU32Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::NONE;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(32, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8845,12 +9545,19 @@ VCmpxFF16Vopc::VCmpxFF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -8920,12 +9627,19 @@ VCmpxLtF16Vopc::VCmpxLtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9000,12 +9714,19 @@ VCmpxEqF16Vopc::VCmpxEqF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9080,12 +9801,19 @@ VCmpxLeF16Vopc::VCmpxLeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9160,12 +9888,19 @@ VCmpxGtF16Vopc::VCmpxGtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9240,12 +9975,19 @@ VCmpxLgF16Vopc::VCmpxLgF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9320,12 +10062,19 @@ VCmpxGeF16Vopc::VCmpxGeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9400,12 +10149,19 @@ VCmpxOF16Vopc::VCmpxOF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -9694,12 +10450,19 @@ VCmpUF16Vopc::VCmpUF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpUF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -9758,12 +10521,19 @@ VCmpNgeF16Vopc::VCmpNgeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNgeF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -9822,12 +10592,19 @@ VCmpNlgF16Vopc::VCmpNlgF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNlgF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -9886,12 +10663,19 @@ VCmpNgtF16Vopc::VCmpNgtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNgtF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -9950,12 +10734,19 @@ VCmpNleF16Vopc::VCmpNleF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNleF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -10014,12 +10805,19 @@ VCmpNeqF16Vopc::VCmpNeqF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNeqF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -10078,12 +10876,19 @@ VCmpNltF16Vopc::VCmpNltF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpNltF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -10142,12 +10947,19 @@ VCmpTruF16Vopc::VCmpTruF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      vcc = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  vcc.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    vcc.apply_fieldless_caps(false, false, false);
 }
 
 void VCmpTruF16Vopc::execute_impl(amdgpu::Wavefront &wf) {
@@ -10530,12 +11342,19 @@ VCmpxUF16Vopc::VCmpxUF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -10610,12 +11429,19 @@ VCmpxNgeF16Vopc::VCmpxNgeF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -10690,12 +11516,19 @@ VCmpxNlgF16Vopc::VCmpxNlgF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -10770,12 +11603,19 @@ VCmpxNgtF16Vopc::VCmpxNgtF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -10850,12 +11690,19 @@ VCmpxNleF16Vopc::VCmpxNleF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -10930,12 +11777,19 @@ VCmpxNeqF16Vopc::VCmpxNeqF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -11010,12 +11864,19 @@ VCmpxNltF16Vopc::VCmpxNltF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }
@@ -11090,12 +11951,19 @@ VCmpxTruF16Vopc::VCmpxTruF16Vopc(const MachineInst *inst)
     sdwa_src1_sext_ = sw->src1_sext;
     sdwa_src1_neg_ = sw->src1_neg;
     sdwa_src1_abs_ = sw->src1_abs;
+    sdwa_src0_operand_ = &src0;
+    sdwa_src0_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
+    sdwa_src1_operand_ = &vsrc1;
+    sdwa_src1_format_ = amdgpu::sdwa::SourceModifierFormat::F16;
     sdwa_sdst_ = sw->sdst;
     sdwa_sd_ = sw->sd;
+    if (sw->sd)
+      exec = Operand(64, OperandType::OPR_SREG, sw->sdst);
     if (sw->s1)
       vsrc1 = Operand(16, OperandType::OPR_SRC, reinterpret_cast<const OpEncoding *>(inst)->vsrc1);
   }
-  exec.apply_fieldless_caps(false, false, false);
+  if (!(reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_SDWA))
+    exec.apply_fieldless_caps(false, false, false);
   sdst_exec.apply_fieldless_caps(false, false, false);
   flags_ |= WRITES_EXEC;
 }

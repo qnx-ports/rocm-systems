@@ -55,10 +55,6 @@ VReadfirstlaneB32Vop3::VReadfirstlaneB32Vop3(const MachineInst *inst)
   src_operands_[0] = &src0;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    throw util::InvalidInst("V_READFIRSTLANE_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
-    throw util::InvalidInst("V_READFIRSTLANE_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_READFIRSTLANE_B32 does not support DPP", "");
@@ -193,10 +189,6 @@ VMovrelsB32Vop3::VMovrelsB32Vop3(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    throw util::InvalidInst("V_MOVRELS_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
-    throw util::InvalidInst("V_MOVRELS_B32 does not support SRC_LITERAL64", "");
   if (amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0)) {
     auto *dp8 = reinterpret_cast<const Vop3VopDpp8MachineInst *>(inst);
     src0 = Operand(32, OperandType::OPR_VGPR, dp8->vsrc0);
@@ -230,10 +222,6 @@ VPermlane16SwapB32Vop3::VPermlane16SwapB32Vop3(const MachineInst *inst)
   src_operands_[1] = &src0;
   num_src_ = 2;
   num_dst_ = 2;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    throw util::InvalidInst("V_PERMLANE16_SWAP_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
-    throw util::InvalidInst("V_PERMLANE16_SWAP_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_PERMLANE16_SWAP_B32 does not support DPP", "");
@@ -261,13 +249,8 @@ VCndmaskB32Vop3::VCndmaskB32Vop3(const MachineInst *inst)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    src2 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
+      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
     throw util::InvalidInst("V_CNDMASK_B32 does not support SRC_LITERAL64", "");
   if (amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0)) {
     auto *dp8 = reinterpret_cast<const Vop3VopDpp8MachineInst *>(inst);
@@ -669,10 +652,6 @@ VPermlane16B32Vop3::VPermlane16B32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -681,8 +660,7 @@ VPermlane16B32Vop3::VPermlane16B32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANE16_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -704,10 +682,6 @@ VPermlanex16B32Vop3::VPermlanex16B32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -716,8 +690,7 @@ VPermlanex16B32Vop3::VPermlanex16B32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANEX16_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -755,13 +728,8 @@ VCndmaskB16Vop3::VCndmaskB16Vop3(const MachineInst *inst)
                                (((amdgpu::vop3_opsel(inst_) >> 1) & 1u) * 16u)) &
                               0xFFFFu),
         true);
-  if (reinterpret_cast<const OpEncoding *>(inst)->src2 == 255)
-    src2 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
+      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
     throw util::InvalidInst("V_CNDMASK_B16 does not support SRC_LITERAL64", "");
   if (amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0)) {
     auto *dp8 = reinterpret_cast<const Vop3VopDpp8MachineInst *>(inst);
@@ -811,10 +779,6 @@ VPermlaneBcastB32Vop3::VPermlaneBcastB32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -823,8 +787,7 @@ VPermlaneBcastB32Vop3::VPermlaneBcastB32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANE_BCAST_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -846,10 +809,6 @@ VPermlaneUpB32Vop3::VPermlaneUpB32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -858,8 +817,7 @@ VPermlaneUpB32Vop3::VPermlaneUpB32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANE_UP_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -882,10 +840,6 @@ VPermlaneDownB32Vop3::VPermlaneDownB32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -894,8 +848,7 @@ VPermlaneDownB32Vop3::VPermlaneDownB32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANE_DOWN_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -917,10 +870,6 @@ VPermlaneXorB32Vop3::VPermlaneXorB32Vop3(const MachineInst *inst)
   src_operands_[2] = &src2;
   num_src_ = 3;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
@@ -929,8 +878,7 @@ VPermlaneXorB32Vop3::VPermlaneXorB32Vop3(const MachineInst *inst)
     src2 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254 ||
       reinterpret_cast<const OpEncoding *>(inst)->src2 == 254)
     throw util::InvalidInst("V_PERMLANE_XOR_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
@@ -951,12 +899,6 @@ VPermlane16VarB32Vop3::VPermlane16VarB32Vop3(const MachineInst *inst)
   src_operands_[1] = &src1;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
-    throw util::InvalidInst("V_PERMLANE16_VAR_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
-    throw util::InvalidInst("V_PERMLANE16_VAR_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_PERMLANE16_VAR_B32 does not support DPP", "");
@@ -976,12 +918,6 @@ VPermlanex16VarB32Vop3::VPermlanex16VarB32Vop3(const MachineInst *inst)
   src_operands_[1] = &src1;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
-    throw util::InvalidInst("V_PERMLANEX16_VAR_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
-    throw util::InvalidInst("V_PERMLANEX16_VAR_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_PERMLANEX16_VAR_B32 does not support DPP", "");
@@ -1001,16 +937,11 @@ VPermlaneIdxGenB32Vop3::VPermlaneIdxGenB32Vop3(const MachineInst *inst)
   src_operands_[1] = &src1;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255)
-    src0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
   if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
     src1 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
+  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
     throw util::InvalidInst("V_PERMLANE_IDX_GEN_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
@@ -1029,12 +960,6 @@ VReadlaneB32Vop3::VReadlaneB32Vop3(const MachineInst *inst)
   src_operands_[1] = &src1;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 255 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
-    throw util::InvalidInst("V_READLANE_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
-    throw util::InvalidInst("V_READLANE_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))
     throw util::InvalidInst("V_READLANE_B32 does not support DPP", "");
@@ -1056,12 +981,7 @@ VWritelaneB32Vop3::VWritelaneB32Vop3(const MachineInst *inst)
     src0 = Operand(
         32, OperandType::OPR_SIMM32,
         static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src1 == 255)
-    src1 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Vop3InstLiteralMachineInst *>(inst)->simm32));
-  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254 ||
-      reinterpret_cast<const OpEncoding *>(inst)->src1 == 254)
+  if (reinterpret_cast<const OpEncoding *>(inst)->src0 == 254)
     throw util::InvalidInst("V_WRITELANE_B32 does not support SRC_LITERAL64", "");
   if (reinterpret_cast<const OpEncoding *>(inst)->src0 == amdgpu::SRC_DPP ||
       amdgpu::dpp::is_src_dpp8(reinterpret_cast<const OpEncoding *>(inst)->src0))

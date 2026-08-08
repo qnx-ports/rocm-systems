@@ -1468,10 +1468,6 @@ SMovrelsB32Sop1::SMovrelsB32Sop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_MOVRELS_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_MOVRELS_B32 does not support SRC_LITERAL64", "");
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -1485,10 +1481,6 @@ SMovrelsB64Sop1::SMovrelsB64Sop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_MOVRELS_B64 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_MOVRELS_B64 does not support SRC_LITERAL64", "");
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -1550,10 +1542,6 @@ SMovrelsd2B32Sop1::SMovrelsd2B32Sop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_MOVRELSD_2_B32 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_MOVRELSD_2_B32 does not support SRC_LITERAL64", "");
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -1576,10 +1564,6 @@ SSetPcI64Sop1::SSetPcI64Sop1(const MachineInst *inst)
   dst_operands_[0] = &pc;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_SET_PC_I64 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_SET_PC_I64 does not support SRC_LITERAL64", "");
   pc.apply_fieldless_caps(false, false, false);
   flags_ |= INDIRECT_BRANCH;
 }
@@ -1595,10 +1579,6 @@ SSwapPcI64Sop1::SSwapPcI64Sop1(const MachineInst *inst)
   src_operands_[1] = &pc_in;
   num_src_ = 2;
   num_dst_ = 2;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_SWAP_PC_I64 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_SWAP_PC_I64 does not support SRC_LITERAL64", "");
   pc.apply_fieldless_caps(false, false, false);
   pc_in.apply_fieldless_caps(false, false, false);
   flags_ |= INDIRECT_CALL;
@@ -1612,10 +1592,6 @@ SRfeI64Sop1::SRfeI64Sop1(const MachineInst *inst)
   dst_operands_[0] = &pc;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_RFE_I64 does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_RFE_I64 does not support SRC_LITERAL64", "");
   pc.apply_fieldless_caps(false, false, false);
 }
 
@@ -1669,10 +1645,6 @@ SBarrierSignalSop1::SBarrierSignalSop1(const MachineInst *inst)
   src_operands_[0] = &ssrc0;
   num_src_ = 1;
   num_dst_ = 0;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_BARRIER_SIGNAL does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_BARRIER_SIGNAL does not support SRC_LITERAL64", "");
   flags_ |= BARRIER;
 }
 
@@ -1686,10 +1658,6 @@ SBarrierSignalIsfirstSop1::SBarrierSignalIsfirstSop1(const MachineInst *inst)
   dst_operands_[0] = &scc;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_BARRIER_SIGNAL_ISFIRST does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_BARRIER_SIGNAL_ISFIRST does not support SRC_LITERAL64", "");
   scc.apply_fieldless_caps(false, false, false);
 }
 
@@ -1702,10 +1670,6 @@ SGetBarrierStateSop1::SGetBarrierStateSop1(const MachineInst *inst)
   src_operands_[0] = &ssrc0;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_GET_BARRIER_STATE does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_GET_BARRIER_STATE does not support SRC_LITERAL64", "");
 }
 
 SBarrierInitSop1::SBarrierInitSop1(const MachineInst *inst)
@@ -1717,10 +1681,6 @@ SBarrierInitSop1::SBarrierInitSop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 0;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_BARRIER_INIT does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_BARRIER_INIT does not support SRC_LITERAL64", "");
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -1731,10 +1691,6 @@ SBarrierJoinSop1::SBarrierJoinSop1(const MachineInst *inst)
   src_operands_[0] = &ssrc0;
   num_src_ = 1;
   num_dst_ = 0;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_BARRIER_JOIN does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_BARRIER_JOIN does not support SRC_LITERAL64", "");
 }
 
 SAllocVgprSop1::SAllocVgprSop1(const MachineInst *inst)
@@ -1766,10 +1722,6 @@ SWakeupBarrierSop1::SWakeupBarrierSop1(const MachineInst *inst)
   src_operands_[0] = &ssrc0;
   num_src_ = 1;
   num_dst_ = 0;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    throw util::InvalidInst("S_WAKEUP_BARRIER does not support 32-bit literals", "");
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 254)
-    throw util::InvalidInst("S_WAKEUP_BARRIER does not support SRC_LITERAL64", "");
 }
 
 SSleepVarSop1::SSleepVarSop1(const MachineInst *inst)

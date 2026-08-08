@@ -597,10 +597,6 @@ SSetpcB64Sop1::SSetpcB64Sop1(const MachineInst *inst)
   dst_operands_[0] = &pc;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        64, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   pc.apply_fieldless_caps(false, false, false);
   flags_ |= INDIRECT_BRANCH;
 }
@@ -621,10 +617,6 @@ SSwappcB64Sop1::SSwappcB64Sop1(const MachineInst *inst)
   src_operands_[1] = &pc_in;
   num_src_ = 2;
   num_dst_ = 2;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        64, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   pc.apply_fieldless_caps(false, false, false);
   pc_in.apply_fieldless_caps(false, false, false);
   flags_ |= INDIRECT_CALL;
@@ -644,10 +636,6 @@ SRfeB64Sop1::SRfeB64Sop1(const MachineInst *inst)
   dst_operands_[0] = &pc;
   num_src_ = 1;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        64, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   pc.apply_fieldless_caps(false, false, false);
 }
 
@@ -941,10 +929,6 @@ SMovrelsB32Sop1::SMovrelsB32Sop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -973,10 +957,6 @@ SMovrelsB64Sop1::SMovrelsB64Sop1(const MachineInst *inst)
   src_operands_[1] = &m0;
   num_src_ = 2;
   num_dst_ = 1;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        64, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   m0.apply_fieldless_caps(false, false, false);
 }
 
@@ -1068,10 +1048,6 @@ SCbranchJoinSop1::SCbranchJoinSop1(const MachineInst *inst)
   dst_operands_[1] = &pc;
   num_src_ = 1;
   num_dst_ = 2;
-  if (reinterpret_cast<const OpEncoding *>(inst)->ssrc0 == 255)
-    ssrc0 = Operand(
-        32, OperandType::OPR_SIMM32,
-        static_cast<int>(reinterpret_cast<const Sop1InstLiteralMachineInst *>(inst)->simm32));
   sdst_exec.apply_fieldless_caps(false, false, false);
   pc.apply_fieldless_caps(false, false, false);
 }

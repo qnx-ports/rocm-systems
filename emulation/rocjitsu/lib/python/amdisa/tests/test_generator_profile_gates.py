@@ -217,6 +217,12 @@ def _generated_constructor_body(cpp: str, class_name: str) -> str:
     return cpp[start:end]
 
 
+def _generated_bool_method_body(cpp: str, class_name: str, method: str) -> str:
+    start = cpp.index(f'bool {class_name}::{method}() const')
+    end = cpp.index('\n\n', start)
+    return cpp[start:end]
+
+
 def _execution_source_path(path: Path) -> Path:
     """Return the source containing execution bodies for a generated file."""
     if path.parent.name != 'gfx1250':
@@ -2075,11 +2081,16 @@ def test_gfx1250_generated_literal_validation(gfx1250_generated_root: Path):
     vopd = (gfx1250_generated_root / 'vopd.cpp').read_text()
 
     sop1_encoding_ctor = _generated_constructor_body(encodings, 'Sop1')
-    assert 'inst_.op != 76 && inst_.op != 77' in sop1_encoding_ctor
+    assert 'has_encoded_literal32()' in sop1_encoding_ctor
+    sop1_literal_helper = _generated_bool_method_body(
+        encodings, 'Sop1', 'has_encoded_literal32'
+    )
+    assert 'case 76:' not in sop1_literal_helper
+    assert 'case 77:' not in sop1_literal_helper
 
     barrier_ctor = _generated_constructor_body(sop1, 'SBarrierSignalSop1')
-    assert 'does not support 32-bit literals' in barrier_ctor
-    assert 'does not support SRC_LITERAL64' in barrier_ctor
+    assert 'OperandType::OPR_SIMM32' not in barrier_ctor
+    assert 'OperandType::OPR_SIMM64' not in barrier_ctor
 
     sop2_ctor = _generated_constructor_body(sop2, 'SAddCoU32Sop2')
     assert 'may not mix 32-bit and 64-bit literals' in sop2_ctor
@@ -2096,7 +2107,12 @@ def test_generated_sendmsg_return_selectors_are_not_literals(
     sop1 = (generated_root / 'sop1.cpp').read_text()
 
     sop1_encoding_ctor = _generated_constructor_body(encodings, 'Sop1')
-    assert 'inst_.op != 76 && inst_.op != 77' in sop1_encoding_ctor
+    assert 'has_encoded_literal32()' in sop1_encoding_ctor
+    sop1_literal_helper = _generated_bool_method_body(
+        encodings, 'Sop1', 'has_encoded_literal32'
+    )
+    assert 'case 76:' not in sop1_literal_helper
+    assert 'case 77:' not in sop1_literal_helper
 
     for class_name in ('SSendmsgRtnB32Sop1', 'SSendmsgRtnB64Sop1'):
         sendmsg_ctor = _generated_constructor_body(sop1, class_name)
@@ -2865,6 +2881,21 @@ def test_gfx1250_helper_blocks_emit_scaled_wmma_table_decoder(
     assert 'isWmmaScaleF32Vop3px2' not in decode_body
     assert decoder.count('&Decoder::decodeVWmmaScaleF32Vop3px2,') == 2
     assert 'if (!isVop3pOp(opcode[2], 0x33)' in decoder
+
+
+def test_cdna4_vop3px2_prefix_decoder_validates_suffix(cdna4_generated_root: Path):
+    decoder = (cdna4_generated_root / 'decoder.cpp').read_text()
+    decode_body = decoder.split(
+        'std::unique_ptr<Instruction> Decoder::decode(const MachineInst *opcode) {'
+    )[1].split('std::unique_ptr<Instruction> Decoder::decodeInvalid', 1)[0]
+
+    assert 'isMfmaScaleF8f6f4Vop3px2' not in decode_body
+    assert 'suffix_encoding != encoding::kVop3pMfma' in decoder
+    assert 'kVMfmaF3216x16x128F8f6f4Vop3pMfma' in decoder
+    assert 'kVMfmaF3232x32x64F8f6f4Vop3pMfma' in decoder
+    assert 'return decodeInvalid(opcode);' in decoder
+    assert 'VMfmaF3216x16x128F8f6f4Vop3pMfma>(opcode + 2, true)' in decoder
+    assert 'VMfmaF3232x32x64F8f6f4Vop3pMfma>(opcode + 2, true)' in decoder
 
 
 @pytest.mark.parametrize(
