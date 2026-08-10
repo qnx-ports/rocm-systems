@@ -627,15 +627,23 @@ void NullDevice::fillDeviceInfo(const Pal::DeviceProperties& palProp,
 #if IS_WINDOWS
   info_.luidLowPart_ = palProp.osProperties.luidLowPart;
   info_.luidHighPart_ = palProp.osProperties.luidHighPart;
-#endif
-  // Setup the node mask for MGPU only case from the original PAL list of all devices
-  if ((gNumDevices > 1) && (pal_device != nullptr)) {
-    for (uint32_t i = 0; i < gNumDevices; ++i) {
-      if (gDeviceList[i] == pal_device) {
-        info_.luidDeviceNodeMask_ = 1 << i;
-      }
+  // The node mask identifies this device's node WITHIN the adapter identified
+  // by the LUID. Devices that share a LUID form one linked display adapter
+  // (LDA); a standalone adapter has a single node. So the node index is this
+  // device's position among devices sharing the same LUID: standalone -> 0x1,
+  // and a genuine LDA -> 1 << localNodeIndex.
+  uint32_t luidNodeIndex = 0;
+  for (uint32_t i = 0; (i < gNumDevices) && (gDeviceList[i] != pal_device); ++i) {
+    Pal::DeviceProperties siblingProps = {};
+    if ((gDeviceList[i] != nullptr) &&
+        (gDeviceList[i]->GetProperties(&siblingProps) == Pal::Result::Success) &&
+        (siblingProps.osProperties.luidLowPart == palProp.osProperties.luidLowPart) &&
+        (siblingProps.osProperties.luidHighPart == palProp.osProperties.luidHighPart)) {
+      ++luidNodeIndex;
     }
   }
+  info_.luidDeviceNodeMask_ = 1u << luidNodeIndex;
+#endif
 #if PAL_CLIENT_INTERFACE_MAJOR_VERSION >= 989
   info_.hasExpertSchedMode_ = palProp.gfxTriple >= Pal::IpLevel(12, 0);
 #else

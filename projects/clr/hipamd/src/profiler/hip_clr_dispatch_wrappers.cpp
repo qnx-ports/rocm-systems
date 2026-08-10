@@ -5057,6 +5057,15 @@ static hipError_t hipLibraryGetManagedLayer(void** dptr, size_t* bytes, hipLibra
   return _r;
 }
 
+// api_id = 514
+static hipError_t hipDeviceGetLuidLayer(char* luid, unsigned int* deviceNodeMask,
+                                        hipDevice_t device) {
+  auto* _rec = HipGetActiveRecordExt(514u);
+  auto _r = g_next.hipDeviceGetLuid_fn(luid, deviceNodeMask, device);
+  _rec->end_ns = NowNs();
+  return _r;
+}
+
 // API name table — indexed by api_id (same order as UpdateDispatchTable).
 const char* const kHipApiNamesExt[] = {
   "hipApiName",
@@ -5573,8 +5582,9 @@ const char* const kHipApiNamesExt[] = {
   "hipKernelGetFunction",
   "hipLibraryGetGlobal",
   "hipLibraryGetManaged",
+  "hipDeviceGetLuid",
 };
-const size_t kHipApiNamesCountExt = 514;
+const size_t kHipApiNamesCountExt = 515;
 
 #include <cstring>
 
@@ -5636,6 +5646,7 @@ void HipProfilerBuildWrapperTableExt(HipDispatchTable* tbl) {
   g_wrapper_tbl.hipDeviceGetStreamPriorityRange_fn = hipDeviceGetStreamPriorityRangeLayer;
   g_wrapper_tbl.hipDeviceGetTexture1DLinearMaxWidth_fn = hipDeviceGetTexture1DLinearMaxWidthLayer;
   g_wrapper_tbl.hipDeviceGetUuid_fn = hipDeviceGetUuidLayer;
+  g_wrapper_tbl.hipDeviceGetLuid_fn = hipDeviceGetLuidLayer;
   g_wrapper_tbl.hipDeviceGraphMemTrim_fn = hipDeviceGraphMemTrimLayer;
   g_wrapper_tbl.hipDevicePrimaryCtxGetState_fn = hipDevicePrimaryCtxGetStateLayer;
   g_wrapper_tbl.hipDevicePrimaryCtxRelease_fn = hipDevicePrimaryCtxReleaseLayer;

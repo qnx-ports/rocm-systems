@@ -1077,6 +1077,29 @@ bool Device::populateOCLDeviceConstants() {
                           &localUID)) {
     info_.luidLowPart_ = localUID.low;
     info_.luidHighPart_ = localUID.high;
+#if defined(_WIN32)
+    // The node mask identifies this device's node WITHIN the adapter identified
+    // by the LUID (a D3D/DXGI concept, Windows-only; ROCr does not report it).
+    // Agents that share a LUID form one linked display adapter (LDA); a
+    // standalone adapter has a single node. So the node index is this agent's
+    // position among agents sharing the same LUID: standalone -> 0x1, and a
+    // genuine LDA -> 1 << localNodeIndex.
+    uint32_t luidNodeIndex = 0;
+    for (const auto& siblingAgent : gpu_agents_) {
+      if (siblingAgent.handle == bkendDevice_.handle) {
+        break;
+      }
+      hsa_luid_t siblingUID = {0};
+      if ((HSA_STATUS_SUCCESS ==
+           Hsa::agent_get_info(siblingAgent,
+                               static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_LUID),
+                               &siblingUID)) &&
+          (siblingUID.low == localUID.low) && (siblingUID.high == localUID.high)) {
+        ++luidNodeIndex;
+      }
+    }
+    info_.luidDeviceNodeMask_ = 1u << luidNodeIndex;
+#endif
   }
 
   if (HSA_STATUS_SUCCESS !=
