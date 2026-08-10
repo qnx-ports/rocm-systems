@@ -269,6 +269,7 @@ if(BUILD_TESTS)
       VersionInfoTests.cpp
       device/TestOp128.cpp
       device/GinDeviceTests.cpp
+      device/SymmetricAccumTypeTests.cpp
       device/GinAnvilIpcDevice_test.cpp
       DeviceApiTests.cpp
       common/main_fixtures.cpp
