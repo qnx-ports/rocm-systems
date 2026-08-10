@@ -124,3 +124,67 @@ def test_bad_case_markers_flushed(output_dir, mode, process_type):
         f"Profiler may not have flushed marker data before signal death. "
         f"Files: {files}"
     )
+
+
+def test_coordinated_shutdown_no_deadlock(output_dir, mode, process_type):
+    """Coordinated-shutdown case: profiler signal handlers are ACTIVE while the app runs its
+    own coordinated multi-process shutdown (the sglang/vLLM tensor-parallel pattern -- worker
+    children ignore SIGINT and only exit once the parent tells them to).
+
+    The profiler must re-raise to the app's handler BEFORE waiting for children to exit,
+    otherwise it deadlocks: the parent waits for children that are waiting for the parent.
+    Reaching this validator at all means the execute step did not hang (a regression trips the
+    ctest TIMEOUT); here we additionally require the profiler flushed marker data. exit_marker
+    is intentionally NOT required -- finalization runs on the signal, before the app's
+    coordinated shutdown emits it."""
+    if mode != "coordinated":
+        return
+
+    files = find_json_files(output_dir)
+    assert len(files) > 0
+
+    total_markers = 0
+    for path in files:
+        data = load_json(path)
+        total_markers += count_markers_in_json(data)
+
+    assert total_markers > 10, (
+        f"Expected >10 marker events in JSON output, got {total_markers}. "
+        f"Profiler may not have flushed marker data during coordinated shutdown. "
+        f"Files: {files}"
+    )
+
+
+def test_abandoned_children_flushed(output_dir, mode, process_type):
+    """Abandoned-children case: the parent installs a SIGINT handler but never coordinates its
+    children, and the children ignore signals in their own process group (so the OS/job
+    group-broadcast never reaches them). The ONLY path that can flush each child's data is
+    rocprofv3's kill(child_pid) fallback in wait_for_children. The execute step cleans the output
+    directory first, so any child output present here is from this run -- assert each child
+    produced a valid, populated JSON. If the fallback regresses, the children's output vanishes
+    (nothing masks it), and this fails."""
+    if mode != "abandoned":
+        return
+
+    files = find_json_files(output_dir)
+    assert len(files) > 0, f"No JSON output files found in {output_dir}"
+
+    num_children = 2
+    for cid in range(num_children):
+        marker = f"child_{cid}_"
+        flushed = False
+        for path in files:
+            with open(path, "r") as f:
+                content = f.read()
+            if marker not in content:
+                continue
+            data = json.loads(content)  # child's JSON must be valid, not truncated
+            if count_markers_in_json(data) > 10:
+                flushed = True
+                break
+        assert flushed, (
+            f"child {cid}'s profiling data was not flushed: no valid JSON containing "
+            f"'{marker}' markers found in {output_dir}. rocprofv3's kill(child_pid) fallback "
+            f"in wait_for_children is the only path that can flush an abandoned, signal-ignoring "
+            f"child -- this looks like a regression. Files: {files}"
+        )

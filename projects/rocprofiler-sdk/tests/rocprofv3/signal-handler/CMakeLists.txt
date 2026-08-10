@@ -89,3 +89,80 @@ foreach(PROC_TYPE ${PROCESS_TYPES})
         ARGS --output-dir ${BASE_OUT_DIR}/bad-${PROC_TYPE} --mode bad --process-type
              ${PROC_TYPE})
 endforeach()
+
+# ===========================================================================
+# Coordinated-shutdown case: profiler signal handlers are ACTIVE while the app runs its
+# own coordinated multi-process shutdown (the sglang/vLLM tensor-parallel pattern). Worker
+# children ignore SIGINT and only exit once the parent tells them to. The profiler must
+# re-raise to the app's handler BEFORE waiting for children to exit, else it deadlocks
+# (parent waits for children that are waiting for the parent) and the test hangs -> ctest
+# TIMEOUT.
+#
+# NOTE: unlike the good case, this does NOT pass --disable-signal-handlers, so the
+# profiler's handlers are exercised alongside the app's own (`--fork
+# --app-signal-handler`).
+# ===========================================================================
+set(COORD_NAME "app-coordinated-shutdown-fork")
+
+rocprofiler_add_integration_execute_test(
+    ${COORD_NAME}
+    COMMAND
+        ${TIMEOUT_CMD} $<TARGET_FILE:rocprofiler-sdk::rocprofv3> --hip-trace
+        --marker-trace --output-format json -d ${BASE_OUT_DIR}/coordinated-fork -o
+        out_%pid% -- $<TARGET_FILE:signal-handler-test> --fork --app-signal-handler
+    DEPENDS signal-handler-test
+    TIMEOUT ${CTEST_TIMEOUT}
+    LABELS "integration-tests;signal-handler"
+    PRELOAD "${PRELOAD_ENV}"
+    PASS_REGULAR_EXPRESSION "clean exit"
+    FIXTURES_SETUP ${COORD_NAME})
+
+rocprofiler_add_integration_validate_test(
+    ${COORD_NAME}
+    TEST_PATHS validate.py
+    COPY conftest.py
+    CONFIG pytest.ini
+    TIMEOUT ${CTEST_TIMEOUT}
+    LABELS "integration-tests;signal-handler"
+    FIXTURES_REQUIRED ${COORD_NAME}
+    ARGS --output-dir ${BASE_OUT_DIR}/coordinated-fork --mode coordinated --process-type
+         fork)
+
+# ===========================================================================
+# Abandoned-children case: the app installs a SIGINT handler but never coordinates its
+# children, and the children ignore signals AND leave the process group -- so the OS/job
+# group-broadcast (what `timeout` delivers) never reaches them. The ONLY path that can
+# flush each child's data is the profiler's kill(child_pid) fallback in wait_for_children.
+# This is the regression guard for that fallback.
+#
+# The execute COMMAND is wrapped in `bash -c` to delete the output dir's JSON first: these
+# dirs accumulate across runs, and without a clean slate a stale child file from a
+# previous (passing) run would mask a regression. `$0` is the output dir; `exec "$@"` runs
+# the real command.
+# ===========================================================================
+set(ABANDON_NAME "app-abandoned-children-fork")
+set(ABANDON_OUT_DIR ${BASE_OUT_DIR}/abandoned-fork)
+
+rocprofiler_add_integration_execute_test(
+    ${ABANDON_NAME}
+    COMMAND
+        bash -c "rm -f \"$0\"/*_results.json 2>/dev/null && exec \"$@\""
+        ${ABANDON_OUT_DIR} ${TIMEOUT_CMD} $<TARGET_FILE:rocprofiler-sdk::rocprofv3>
+        --hip-trace --marker-trace --output-format json -d ${ABANDON_OUT_DIR} -o out_%pid%
+        -- $<TARGET_FILE:signal-handler-test> --fork-abandoned
+    DEPENDS signal-handler-test
+    TIMEOUT ${CTEST_TIMEOUT}
+    LABELS "integration-tests;signal-handler"
+    PRELOAD "${PRELOAD_ENV}"
+    PASS_REGULAR_EXPRESSION "clean exit"
+    FIXTURES_SETUP ${ABANDON_NAME})
+
+rocprofiler_add_integration_validate_test(
+    ${ABANDON_NAME}
+    TEST_PATHS validate.py
+    COPY conftest.py
+    CONFIG pytest.ini
+    TIMEOUT ${CTEST_TIMEOUT}
+    LABELS "integration-tests;signal-handler"
+    FIXTURES_REQUIRED ${ABANDON_NAME}
+    ARGS --output-dir ${ABANDON_OUT_DIR} --mode abandoned --process-type fork)

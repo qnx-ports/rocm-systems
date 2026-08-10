@@ -181,6 +181,56 @@ fork_child_worker(int id, int pipe_rd)
     close(pipe_rd);
 }
 
+// Child for the "abandoned children" case. It (1) leaves the parent's process group, so the
+// OS/job group-broadcast (terminal Ctrl+C / `timeout`) never reaches it, and (2) explicitly
+// ignores SIGINT and only waits for a coordination byte from the parent -- which the parent
+// never sends. With rocprofv3's handlers active, its targeted kill(child_pid) fallback (in
+// wait_for_children) is the ONLY thing that reaches this child: it flushes the child's data but,
+// since the profiler honors the ignore, does NOT terminate it. The child's own alarm() reaps it
+// -- on success it has already flushed via that kill; if the fallback regresses away the child is
+// never signalled, never flushes, and alarm() kills it with no output (SIGALRM is unhandled),
+// which is exactly what the validator asserts against.
+void
+fork_child_worker_abandoned(int id, int pipe_rd)
+{
+    setpgid(0, 0);
+
+    struct sigaction sa = {};
+    sa.sa_handler       = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, nullptr);
+
+    alarm(12);
+    fcntl(pipe_rd, F_SETFL, O_NONBLOCK);
+
+    float* d_buf = nullptr;
+    HIP_CHECK(hipMalloc(&d_buf, 1024 * sizeof(float)));
+
+    char range_name[128];
+    snprintf(range_name, sizeof(range_name), "child_%d_pid_%d", id, getpid());
+    roctxRangePush(range_name);
+
+    int iter = 0;
+    while(true)
+    {
+        char iter_name[64];
+        snprintf(iter_name, sizeof(iter_name), "child_%d_iter_%d", id, iter);
+        roctxRangePush(iter_name);
+        test_kernel<<<4, 256>>>(d_buf, 1024);
+        roctxRangePop();
+        iter++;
+
+        char cmd = 0;
+        if(read(pipe_rd, &cmd, 1) == 1 && cmd == 'q') break;  // parent never sends this
+        usleep(10000);
+    }
+
+    HIP_CHECK(hipDeviceSynchronize());
+    HIP_CHECK(hipFree(d_buf));
+    roctxRangePop();
+    close(pipe_rd);
+}
+
 // ============================================================================
 // GOOD CASE modes: app handles signals, coordinates shutdown
 // ============================================================================
@@ -429,6 +479,69 @@ mode_bad_spawn(const char* self_path)
     fprintf(stderr, "Parent PID=%d: exit\n", getpid());
     return 0;
 }
+
+// ============================================================================
+// ABANDONED-CHILDREN case: the parent installs a SIGINT handler (an app that "handles signals")
+// but never coordinates its children, and the children ignore signals in their own process group
+// waiting for a parent 'q' that never comes. With rocprofv3's handlers active, the only path that
+// can flush each child's data is rocprofv3's kill(child_pid) fallback in wait_for_children. This
+// is the regression guard for that fallback: without it, the children's output disappears (the
+// OS group-broadcast can't mask it, because the children left the group).
+// ============================================================================
+int
+mode_abandoned_children()
+{
+    fprintf(stderr, "Mode: abandoned-children/fork, PID=%d\n", getpid());
+
+    constexpr int NUM_CHILDREN = 2;
+    int           pipes[NUM_CHILDREN][2];
+    pid_t         children[NUM_CHILDREN];
+
+    // The children ignore SIGINT, which the profiler now honors, so our wait_for_children kill
+    // flushes each child but does not terminate it -- the child's own alarm() reaps it. (Fork
+    // order vs. the parent's handler install no longer changes this.)
+    for(int i = 0; i < NUM_CHILDREN; i++)
+    {
+        if(pipe(pipes[i]) != 0)
+        {
+            for(int j = 0; j < i; j++)
+            {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            }
+
+            throw std::runtime_error(
+                std::string("signal-handler-test pipe() failed with error code ") +
+                std::to_string(errno));
+        }
+        pid_t pid = fork();
+        if(pid == 0)
+        {
+            close(pipes[i][1]);
+            fork_child_worker_abandoned(i, pipes[i][0]);
+            _exit(0);
+        }
+        children[i] = pid;
+        close(pipes[i][0]);
+    }
+
+    struct sigaction sa = {};
+    sa.sa_handler       = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, nullptr);
+
+    run_kernels("parent");
+
+    // Deliberately do NOT tell the children to shut down (never write 'q'): this is the app that
+    // installs a handler but abandons its workers.
+    fprintf(stderr, "Parent: abandoning children (no coordination sent)\n");
+    for(int i = 0; i < NUM_CHILDREN; i++)
+        waitpid(children[i], nullptr, 0);
+
+    emit_roctx_marker("exit_marker parent fork ppid:%d pid:%d", getppid(), getpid());
+    fprintf(stderr, "Parent PID=%d: clean exit\n", getpid());
+    return 0;
+}
 }  // namespace
 // ============================================================================
 // Main
@@ -443,7 +556,8 @@ main(int argc, char** argv)
     for(int i = 1; i < argc; i++)
     {
         if(strcmp(argv[i], "--single-process") == 0 || strcmp(argv[i], "--fork") == 0 ||
-           strcmp(argv[i], "--fork-exec") == 0 || strcmp(argv[i], "--spawn") == 0)
+           strcmp(argv[i], "--fork-exec") == 0 || strcmp(argv[i], "--spawn") == 0 ||
+           strcmp(argv[i], "--fork-abandoned") == 0)
         {
             mode = argv[i];
         }
@@ -462,6 +576,9 @@ main(int argc, char** argv)
             mode,
             static_cast<int>(app_handles_signals),
             getpid());
+
+    // The parent always installs a handler in this mode; the app_handles_signals flag is moot.
+    if(strcmp(mode, "--fork-abandoned") == 0) return mode_abandoned_children();
 
     if(app_handles_signals)
     {
