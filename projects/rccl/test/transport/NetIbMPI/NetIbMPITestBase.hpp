@@ -36,6 +36,8 @@
 #include <string>
 #include <dirent.h>
 #include <unistd.h>
+#include <thread>
+#include <functional>
 
 #ifdef MPI_TESTS_ENABLED
 
@@ -652,6 +654,189 @@ protected:
             PostSendWithRetry(sendComm, buf, size, tag, mhandle, &req);
             int sz = 0;
             ASSERT_EQ(WaitForCompletion(req, &sz, 10000), ncclSuccess);
+        }
+    }
+
+    // ===============================================================
+    // Multithreading helpers
+    //
+    // Reuses the CLI-flag-driven pthread/std::thread fan-out pattern that
+    // rccl-tests uses (-t/--nthreads, threadLaunch/threadLauncher in
+    // src/common.cu): MPIEnvironment::nThreads (parsed in main_mpi.cpp from
+    // --net_ib_nthreads=N) selects how many worker threads each MPI rank
+    // spawns. Two modes, both requested for this suite:
+    //   - RunMultiThreadedIndependent: each thread owns its own connection
+    //     (mirrors rccl-tests spawning one NCCL comm per thread) — stresses
+    //     the net-ib plugin's init/listen/connect/accept thread-safety.
+    //   - RunMultiThreadedShared: threads share one connection set up by the
+    //     caller, each posting its own tagged isend/irecv — stresses the
+    //     plugin's internal locking (ncclIbMutex / per-device mutex in
+    //     net_ib.cc) rather than connection setup.
+    //
+    // Worker bodies must not call fatal GTest macros (ASSERT_*/FAIL()): those
+    // are documented as unsafe off the main test thread. Instead they return
+    // a ThreadResult, which is turned into an ADD_FAILURE() on the main
+    // thread after all workers are joined — the same non-fatal-assertion
+    // discipline DoSendRecv/DoDirectedSendRecv already use to keep barriers
+    // reachable, extended here from MPI ranks to intra-process threads.
+    // ===============================================================
+
+    struct ThreadResult {
+        bool ok = true;
+        std::string msg;
+    };
+
+    // MPI tag stride reserved per thread when namespacing point-to-point
+    // tags. Existing fan-in/fan-out/all-to-all helpers use tag offsets up to
+    // 300 + numRanks*numRanks; kThreadTagStride is chosen well above any
+    // realistic numRanks so per-thread offsets never collide with those.
+    static constexpr int kThreadTagStride = 10000;
+
+    // Helper: Initialize a NET IB plugin context for one thread's exclusive
+    // use. Distinct from InitNetIb()/initCtx_ (the fixture-wide single-
+    // threaded path) so each thread in RunMultiThreadedIndependent gets an
+    // isolated init context — ncclIbInit() (net_ib.cc) allocates a fresh
+    // netCommConfig per call, so concurrent independent calls are supported.
+    ncclResult_t InitNetIbCtx(void** ctxOut) {
+        ncclNetCommConfig_t commConfig = {};
+        commConfig.trafficClass = NCCL_NET_TRAFFIC_CLASS_UNDEF;
+        return net_->init(ctxOut, 0, &commConfig, nullptr, nullptr);
+    }
+
+    ncclResult_t CreateListenCommCtx(void* ctx, int dev, ncclNetHandle_t* handle, void** listenComm) {
+        return net_->listen(ctx, dev, handle, listenComm);
+    }
+
+    ncclResult_t ConnectToRemoteCtx(void* ctx, int dev, ncclNetHandle_t* handle, void** sendComm) {
+        return net_->connect(ctx, dev, handle, sendComm, nullptr);
+    }
+
+    // Setup a connection using a thread-private init ctx and an explicit MPI
+    // tag, so nThreads concurrent threads doing this against the peer rank
+    // don't collide on the handle-exchange MPI_Send/MPI_Recv. Non-fatal by
+    // design (see section comment above) — returns failure via ThreadResult
+    // instead of ASSERT_*.
+    ThreadResult SetupConnectionForThread(void* ctx, int dev, ConnectionPair& pair,
+                                          int rank, int peerRank, int mpiTag) {
+        ThreadResult result;
+        if (rank == 0) {
+            if (CreateListenCommCtx(ctx, dev, &pair.handle, &pair.listenComm) != ncclSuccess) {
+                result.ok = false;
+                result.msg = "CreateListenComm failed";
+                return result;
+            }
+            MPI_Send(&pair.handle, sizeof(ncclNetHandle_t), MPI_BYTE, peerRank, mpiTag, MPI_COMM_WORLD);
+            for (int attempts = 0; pair.recvComm == nullptr; attempts++) {
+                if (AcceptConnection(pair.listenComm, &pair.recvComm) != ncclSuccess) {
+                    result.ok = false;
+                    result.msg = "AcceptConnection error";
+                    return result;
+                }
+                if (pair.recvComm == nullptr) {
+                    if (attempts >= kMaxRetryAttempts) {
+                        result.ok = false;
+                        result.msg = "AcceptConnection timed out";
+                        return result;
+                    }
+                    usleep(kPollIntervalUs);
+                }
+            }
+        } else {
+            MPI_Recv(&pair.handle, sizeof(ncclNetHandle_t), MPI_BYTE, peerRank, mpiTag,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for (int attempts = 0; pair.sendComm == nullptr; attempts++) {
+                if (ConnectToRemoteCtx(ctx, dev, &pair.handle, &pair.sendComm) != ncclSuccess) {
+                    result.ok = false;
+                    result.msg = "ConnectToRemote error";
+                    return result;
+                }
+                if (pair.sendComm == nullptr) {
+                    if (attempts >= kMaxRetryAttempts) {
+                        result.ok = false;
+                        result.msg = "ConnectToRemote timed out";
+                        return result;
+                    }
+                    usleep(kPollIntervalUs);
+                }
+            }
+        }
+        // Barrier carries no data, so nThreads*2 concurrent calls on
+        // MPI_COMM_WORLD are safe: only the call *count* must match across
+        // ranks, not which thread's call pairs with which.
+        MPI_Barrier(MPI_COMM_WORLD);
+        return result;
+    }
+
+    void TeardownConnectionForThread(void* ctx, ConnectionPair& pair, int rank) {
+        if (rank == 0) {
+            if (pair.recvComm) net_->closeRecv(pair.recvComm);
+            if (pair.listenComm) net_->closeListen(pair.listenComm);
+        } else {
+            if (pair.sendComm) net_->closeSend(pair.sendComm);
+        }
+        if (ctx) net_->finalize(ctx);
+    }
+
+    // Mode A: nThreads independent per-thread connections. Thread 0 runs
+    // inline on the calling (main GTest) thread; threads 1..nThreads-1 are
+    // spawned via std::thread — matching rccl-tests' convention of running
+    // thread 0 inline (common.cu). Each thread gets its own init ctx and its
+    // own connection to the peer rank's correspondingly-indexed thread,
+    // tag-namespaced via kThreadTagStride.
+    // body: ThreadResult(int threadIdx, ConnectionPair& pair)
+    void RunMultiThreadedIndependent(int dev, int nThreads,
+                                     std::function<ThreadResult(int, ConnectionPair&)> body) {
+        const int rank     = MPIEnvironment::world_rank;
+        const int peerRank = (rank + 1) % 2;
+
+        std::vector<ThreadResult> results(nThreads);
+        auto worker = [&](int threadIdx) {
+            ThreadResult& out = results[threadIdx];
+            void* ctx = nullptr;
+            if (InitNetIbCtx(&ctx) != ncclSuccess) {
+                out.ok  = false;
+                out.msg = "InitNetIb failed";
+                return;
+            }
+            ConnectionPair pair;
+            const int tag = threadIdx * kThreadTagStride;
+            ThreadResult setupResult = SetupConnectionForThread(ctx, dev, pair, rank, peerRank, tag);
+            if (!setupResult.ok) {
+                out = setupResult;
+                net_->finalize(ctx);
+                return;
+            }
+            out = body(threadIdx, pair);
+            TeardownConnectionForThread(ctx, pair, rank);
+        };
+
+        std::vector<std::thread> workers;
+        for (int t = nThreads - 1; t >= 1; t--) workers.emplace_back(worker, t);
+        worker(0);
+        for (auto& w : workers) w.join();
+
+        for (int t = 0; t < nThreads; t++) {
+            if (!results[t].ok) ADD_FAILURE() << "thread " << t << ": " << results[t].msg;
+        }
+    }
+
+    // Mode B: nThreads driving ops on one already-established connection.
+    // Caller must set up the shared connection (e.g. via
+    // SetupConnectionWithGuard) before calling this. Each thread posts/waits
+    // on its own isend/irecv, typically tagged by threadIdx * kThreadTagStride,
+    // against the SAME sendComm/recvComm.
+    // body: ThreadResult(int threadIdx)
+    void RunMultiThreadedShared(int nThreads, std::function<ThreadResult(int)> body) {
+        std::vector<ThreadResult> results(nThreads);
+        auto worker = [&](int threadIdx) { results[threadIdx] = body(threadIdx); };
+
+        std::vector<std::thread> workers;
+        for (int t = nThreads - 1; t >= 1; t--) workers.emplace_back(worker, t);
+        worker(0);
+        for (auto& w : workers) w.join();
+
+        for (int t = 0; t < nThreads; t++) {
+            if (!results[t].ok) ADD_FAILURE() << "thread " << t << ": " << results[t].msg;
         }
     }
 

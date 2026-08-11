@@ -680,6 +680,15 @@ protected:
         ASSERT_GE(numHostSegments, 0);
         ASSERT_LE(numHostSegments, numSegments);
 
+#ifndef RCCL_HAS_HIP_MEM_LOCATION_TYPE_HOST
+        // hipMemLocationTypeHost isn't declared by this HIP runtime's headers
+        // at all (older SDKs). Leave buf.totalSize == 0 so callers GTEST_SKIP(),
+        // same as the runtime-unsupported path below.
+        if (numHostSegments > 0) {
+            return;
+        }
+#endif
+
         hipMemAllocationProp devProp = {};
         devProp.type                = hipMemAllocationTypePinned;
         devProp.location.type       = hipMemLocationTypeDevice;
@@ -688,7 +697,11 @@ protected:
 
         hipMemAllocationProp hostProp = {};
         hostProp.type                = hipMemAllocationTypePinned;
+#ifdef RCCL_HAS_HIP_MEM_LOCATION_TYPE_HOST
         hostProp.location.type       = hipMemLocationTypeHost;
+#else
+        hostProp.location.type       = hipMemLocationTypeDevice; // unreachable: numHostSegments==0 guaranteed above
+#endif
         hostProp.location.id         = 0;
         hostProp.requestedHandleType = hipMemHandleTypePosixFileDescriptor;
 

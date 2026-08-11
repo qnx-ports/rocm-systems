@@ -15,6 +15,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <gtest/gtest.h>
 
 #ifdef MPI_TESTS_ENABLED
@@ -23,8 +24,42 @@
     #include "MPITestBase.hpp"
     #include "MPIEnvironment.hpp"
 
+namespace
+{
+/**
+ * @brief Parse and strip --net_ib_nthreads=N from argv before GTest sees it
+ *
+ * Mirrors rccl-tests' own -t/--nthreads handling (parsed in its hand-written
+ * main() before any collective/threading logic runs): a custom flag must be
+ * consumed here since GTest's InitGoogleTest() does not know about it.
+ */
+int parseAndStripNThreads(int* argc, char** argv)
+{
+    constexpr const char* kFlagPrefix = "--net_ib_nthreads=";
+    const size_t           kPrefixLen = std::strlen(kFlagPrefix);
+    int                    nThreads   = 1;
+
+    int writeIdx = 1;
+    for(int readIdx = 1; readIdx < *argc; ++readIdx)
+    {
+        if(std::strncmp(argv[readIdx], kFlagPrefix, kPrefixLen) == 0)
+        {
+            nThreads = std::atoi(argv[readIdx] + kPrefixLen);
+            if(nThreads < 1) nThreads = 1;
+            continue;
+        }
+        argv[writeIdx++] = argv[readIdx];
+    }
+    *argc = writeIdx;
+    return nThreads;
+}
+} // namespace
+
 int main(int argc, char* argv[])
 {
+    // Parse our own custom flag before anything else touches argv
+    MPIEnvironment::nThreads = parseAndStripNThreads(&argc, argv);
+
     // Initialize MPI using shared helper
     auto mpi_ctx = MPIHelpers::initializeMPI(&argc, &argv);
 

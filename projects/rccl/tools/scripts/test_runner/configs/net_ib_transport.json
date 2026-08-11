@@ -931,6 +931,57 @@
       "env_variables": {
         "NCCL_NET": "ib-cast"
       }
+    },
+    "net_ib_multithread_connection": {
+      "extends": "net_ib_base",
+      "timeout": 300,
+      "command_args": "--net_ib_nthreads=4",
+      "env_variables": {
+        "NCCL_DEBUG": "INFO",
+        "NCCL_DEBUG_SUBSYS": "NET,INIT"
+      },
+      "tests": [
+        {
+          "name": "NetIB_MultiThread_SimpleSendRecv",
+          "description": "4 threads/rank, each with its own independent connection (RunMultiThreadedIndependent, Mode A): validates concurrent init/listen/connect/accept thread-safety",
+          "test_filter": "NetIbMPITest.SimpleSendRecv"
+        },
+        {
+          "name": "NetIB_MultiThread_MultipleSequentialTransfers",
+          "description": "4 threads/rank, each with its own independent connection running 100 sequential transfers (RunMultiThreadedIndependent, Mode A)",
+          "test_filter": "NetIbMPITest.MultipleSequentialTransfers"
+        }
+      ]
+    },
+
+    "net_ib_multithread_shared": {
+      "extends": "net_ib_base",
+      "timeout": 300,
+      "command_args": "--net_ib_nthreads=4",
+      "env_variables": {
+        "NCCL_DEBUG": "INFO",
+        "NCCL_DEBUG_SUBSYS": "NET,INIT"
+      },
+      "tests": [
+        {
+          "name": "NetIB_MultiThread_SendRecvMultipleSizes",
+          "description": "4 threads/rank concurrently posting tagged isend/irecv over ONE shared connection (RunMultiThreadedShared, Mode B): stresses net_ib.cc internal locking (ncclIbMutex / per-device mutex)",
+          "test_filter": "NetIbMPITest.SendRecvMultipleSizes"
+        }
+      ]
+    },
+
+    "net_ib_multithread_cast": {
+      "extends": "cast_wrr_split",
+      "timeout": 300,
+      "command_args": "--net_ib_nthreads=4",
+      "tests": [
+        {
+          "name": "Cast_MultiThread_LargeTransfer",
+          "description": "4 threads/rank concurrently running 16 MB split-path transfers over ONE shared CAST connection (RunMultiThreadedShared, Mode B)",
+          "test_filter": "NetIbMPITest.CastLargeTransfer"
+        }
+      ]
     }
   },
   "test_suites": [
@@ -1184,6 +1235,24 @@
       "name": "NET IB-CAST - GIN DmaBuf",
       "description": "GIN plugin tests with dma-buf support",
       "config": "net_ib_cast_gin_dmabuf",
+      "enabled": true
+    },
+    {
+      "name": "NET IB - Multithread Independent Connections",
+      "description": "4 threads/rank, each with its own independent connection (--net_ib_nthreads=4, RunMultiThreadedIndependent / Mode A)",
+      "config": "net_ib_multithread_connection",
+      "enabled": true
+    },
+    {
+      "name": "NET IB - Multithread Shared Connection",
+      "description": "4 threads/rank concurrently driving ops on one shared connection (--net_ib_nthreads=4, RunMultiThreadedShared / Mode B)",
+      "config": "net_ib_multithread_shared",
+      "enabled": true
+    },
+    {
+      "name": "NET IB - Multithread CAST Shared Connection",
+      "description": "4 threads/rank concurrently driving large transfers on one shared CAST connection (--net_ib_nthreads=4, RunMultiThreadedShared / Mode B)",
+      "config": "net_ib_multithread_cast",
       "enabled": true
     }
   ]

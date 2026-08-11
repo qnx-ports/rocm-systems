@@ -1124,6 +1124,17 @@ TEST_F(NetIbMPITest, CastSendRecvMultipleSizes) {
 // dataPerQp = 16MB / nqps >> splitDataMin → split path taken.
 // Verify: data integrity + 0 WRR tokens consumed.
 // =============================================================================
+// Parameterized by MPIEnvironment::nThreads. At N=1, behaves exactly as
+// before (single 16 MB transfer, WRR-token-consumption invariant checked).
+// At N>1, uses RunMultiThreadedShared (Mode B): nThreads threads each run
+// their own 16 MB transfer concurrently against the SAME sendComm/recvComm,
+// tag-namespaced by threadIdx*kThreadTagStride — stressing the split-data
+// path (net_ib_cast) under concurrent large transfers rather than
+// single-transfer WRR bookkeeping. The WRR-token invariant check is
+// single-thread-only: concurrent transfers interleave token consumption in
+// a data-race-free but non-deterministic order (both split-path sends can
+// run in parallel, each still consuming 0 WRR tokens per the split
+// contract), so it can't be attributed to one thread's before/after delta.
 TEST_F(NetIbMPITest, CastLargeTransfer) {
     ASSERT_TRUE(validateTestPrerequisites(kExactTwoProcesses, kExactTwoProcesses,
                                          false, kMinGpusPerNode, kNoNodeLimit))
@@ -1146,46 +1157,115 @@ TEST_F(NetIbMPITest, CastLargeTransfer) {
     SetupCastConnection(0, &listenComm, &sendComm, &recvComm);
 
     constexpr size_t kMsgSz = kLargeBufferSize; // 16 MB
-    std::vector<char> sendBuf(kMsgSz);
-    std::vector<char> recvBuf(kMsgSz, 0);
-    for (size_t i = 0; i < kMsgSz; i++) sendBuf[i] = static_cast<char>(i & 0xFF);
+    const int nThreads = MPIEnvironment::nThreads;
 
-    void* comm    = (rank == 0) ? recvComm : sendComm;
-    void* baseBuf = (rank == 0) ? static_cast<void*>(recvBuf.data())
-                                : static_cast<void*>(sendBuf.data());
-    void* mhandle = nullptr;
-    ASSERT_EQ(RegisterMemory(comm, baseBuf, kMsgSz, NCCL_PTR_HOST, &mhandle), ncclSuccess);
+    if (nThreads <= 1) {
+        std::vector<char> sendBuf(kMsgSz);
+        std::vector<char> recvBuf(kMsgSz, 0);
+        for (size_t i = 0; i < kMsgSz; i++) sendBuf[i] = static_cast<char>(i & 0xFF);
 
-    // Warmup: learn real nqps.
-    const int actualNqps = GetActualNqps(sendComm, recvComm, baseBuf, 64, 2099, mhandle);
-    ASSERT_GT(actualNqps, 0);
+        void* comm    = (rank == 0) ? recvComm : sendComm;
+        void* baseBuf = (rank == 0) ? static_cast<void*>(recvBuf.data())
+                                    : static_cast<void*>(sendBuf.data());
+        void* mhandle = nullptr;
+        ASSERT_EQ(RegisterMemory(comm, baseBuf, kMsgSz, NCCL_PTR_HOST, &mhandle), ncclSuccess);
 
-    if (rank == 1) {
-        const std::vector<int> tokens = EqualTokens(actualNqps);
-        ASSERT_EQ(ncclIbCastSetTokens(sendComm, tokens.data(), actualNqps), ncclSuccess);
+        // Warmup: learn real nqps.
+        const int actualNqps = GetActualNqps(sendComm, recvComm, baseBuf, 64, 2099, mhandle);
+        ASSERT_GT(actualNqps, 0);
+
+        if (rank == 1) {
+            const std::vector<int> tokens = EqualTokens(actualNqps);
+            ASSERT_EQ(ncclIbCastSetTokens(sendComm, tokens.data(), actualNqps), ncclSuccess);
+        }
+
+        int activeTotBeforeLarge = 0;
+        if (rank == 1) {
+            struct ncclIbCastSchedState st = {};
+            ASSERT_EQ(ncclIbCastGetSchedState(sendComm, &st), ncclSuccess);
+            activeTotBeforeLarge = st.activeTotTokens;
+        }
+        CastDoSendRecv(rank, sendComm, recvComm, baseBuf, kMsgSz, 2100, mhandle);
+
+        if (rank == 0)
+            EXPECT_EQ(memcmp(sendBuf.data(), recvBuf.data(), kMsgSz), 0) << "data mismatch";
+
+        if (rank == 1) {
+            struct ncclIbCastSchedState st = {};
+            ASSERT_EQ(ncclIbCastGetSchedState(sendComm, &st), ncclSuccess);
+            ASSERT_TRUE(st.schedInit);
+            EXPECT_EQ(activeTotBeforeLarge - st.activeTotTokens, 0)
+                << "16 MB transfer must use split path, not WRR";
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        TeardownConnection(recvComm, listenComm, sendComm, mhandle);
+        return;
     }
 
-    int activeTotBeforeLarge = 0;
-    if (rank == 1) {
-        struct ncclIbCastSchedState st = {};
-        ASSERT_EQ(ncclIbCastGetSchedState(sendComm, &st), ncclSuccess);
-        activeTotBeforeLarge = st.activeTotTokens;
+    RunMultiThreadedShared(nThreads, [&](int threadIdx) -> ThreadResult {
+        ThreadResult result;
+        std::vector<char> sendBuf(kMsgSz);
+        std::vector<char> recvBuf(kMsgSz, 0);
+        for (size_t i = 0; i < kMsgSz; i++)
+            sendBuf[i] = static_cast<char>((i + threadIdx) & 0xFF);
+
+        void* comm    = (rank == 0) ? recvComm : sendComm;
+        void* baseBuf = (rank == 0) ? static_cast<void*>(recvBuf.data())
+                                    : static_cast<void*>(sendBuf.data());
+        void* mhandle = nullptr;
+        if (RegisterMemory(comm, baseBuf, kMsgSz, NCCL_PTR_HOST, &mhandle) != ncclSuccess) {
+            result.ok = false; result.msg = "RegisterMemory failed"; return result;
+        }
+        NetMHandleGuard mhandleGuard(mhandle, NetMHandleDeleter(net_, comm));
+
+        const int tag = threadIdx * kThreadTagStride + 2100;
+        void* req = nullptr;
+        if (rank == 0) {
+            void*  bufs[1]    = {baseBuf};
+            size_t sizes[1]   = {kMsgSz};
+            int    tags[1]    = {tag};
+            void*  handles[1] = {mhandle};
+            if (PostRecv(recvComm, 1, bufs, sizes, tags, handles, &req) != ncclSuccess ||
+                req == nullptr) {
+                result.ok = false; result.msg = "PostRecv failed"; return result;
+            }
+        } else {
+            int attempts = 0;
+            do {
+                if (PostSend(sendComm, baseBuf, kMsgSz, tag, mhandle, &req) != ncclSuccess) {
+                    result.ok = false; result.msg = "PostSend failed"; return result;
+                }
+                if (req != nullptr) break;
+                if (++attempts >= kMaxRetryAttempts) {
+                    result.ok = false; result.msg = "PostSend NULL request after retries"; return result;
+                }
+                usleep(kPollIntervalUs);
+            } while (req == nullptr);
+        }
+
+        int sz = 0;
+        if (WaitForCompletion(req, &sz, kLargeTransferTimeout) != ncclSuccess) {
+            result.ok = false; result.msg = "WaitForCompletion failed"; return result;
+        }
+
+        if (rank == 0 && memcmp(sendBuf.data(), recvBuf.data(), kMsgSz) != 0) {
+            result.ok = false; result.msg = "data mismatch"; return result;
+        }
+        return result;
+    });
+
+    // Threads already deregistered their own mhandle via NetMHandleGuard;
+    // just close the comms (TeardownConnection's unconditional
+    // DeregisterMemory would fail here since there's no single shared
+    // mhandle left to deregister).
+    if (rank == 0) {
+        ASSERT_EQ(CloseRecvComm(recvComm), ncclSuccess);
+        ASSERT_EQ(CloseListenComm(listenComm), ncclSuccess);
+    } else {
+        ASSERT_EQ(CloseSendComm(sendComm), ncclSuccess);
     }
-    CastDoSendRecv(rank, sendComm, recvComm, baseBuf, kMsgSz, 2100, mhandle);
-
-    if (rank == 0)
-        EXPECT_EQ(memcmp(sendBuf.data(), recvBuf.data(), kMsgSz), 0) << "data mismatch";
-
-    if (rank == 1) {
-        struct ncclIbCastSchedState st = {};
-        ASSERT_EQ(ncclIbCastGetSchedState(sendComm, &st), ncclSuccess);
-        ASSERT_TRUE(st.schedInit);
-        EXPECT_EQ(activeTotBeforeLarge - st.activeTotTokens, 0)
-            << "16 MB transfer must use split path, not WRR";
-    }
-
     MPI_Barrier(MPI_COMM_WORLD);
-    TeardownConnection(recvComm, listenComm, sendComm, mhandle);
 }
 
 // =============================================================================
