@@ -15841,9 +15841,23 @@ TEST(KernelDescriptorTranslator, VirtualLdsRejectsMissingKernargSegmentPointerWi
 
 TEST(KernelDescriptorTranslator, IgnoresNonAllocExecutableSectionsForEntryRange) {
   auto image = rocjitsu::make_minimal_amdgpu_elf_with_descriptor_after_text();
+  rocjitsu::AmdGpuCodeObject source(image.data(), image.size());
+  ASSERT_TRUE(source.is_valid());
+  const uint64_t descriptor_vaddr = source.kernel_descriptor_offset("kernel");
+  ASSERT_NE(descriptor_vaddr, 0u);
   const auto ehdr = rocjitsu::read_elf_struct_for_test<rocjitsu::Elf64_Ehdr>(image, 0);
   auto shdrs =
       rocjitsu::read_elf_array_for_test<rocjitsu::Elf64_Shdr>(image, ehdr.e_shoff, ehdr.e_shnum);
+
+  const auto descriptor_section = std::ranges::find_if(shdrs, [&](const auto &section) {
+    return (section.sh_flags & rocjitsu::SHF_ALLOC) != 0 &&
+           (section.sh_flags & rocjitsu::SHF_EXECINSTR) == 0 &&
+           descriptor_vaddr >= section.sh_addr &&
+           descriptor_vaddr - section.sh_addr < section.sh_size;
+  });
+  ASSERT_NE(descriptor_section, shdrs.end());
+  const uint64_t descriptor_file_offset =
+      descriptor_section->sh_offset + (descriptor_vaddr - descriptor_section->sh_addr);
 
   constexpr uint64_t fake_exec_vaddr = 0x9000;
   shdrs[5].sh_flags = rocjitsu::SHF_EXECINSTR;
@@ -15853,9 +15867,9 @@ TEST(KernelDescriptorTranslator, IgnoresNonAllocExecutableSectionsForEntryRange)
     rocjitsu::write_elf_struct_for_test(image, ehdr.e_shoff + i * sizeof(rocjitsu::Elf64_Shdr),
                                         shdrs[i]);
 
-  rocjitsu::write_kernel_descriptor_entry_offset(image.data() + shdrs[2].sh_offset,
+  rocjitsu::write_kernel_descriptor_entry_offset(image.data() + descriptor_file_offset,
                                                  static_cast<int64_t>(fake_exec_vaddr) -
-                                                     static_cast<int64_t>(shdrs[2].sh_addr));
+                                                     static_cast<int64_t>(descriptor_vaddr));
 
   rocjitsu::KernelDescriptorTranslator translator(ROCJITSU_CODE_ARCH_CDNA4,
                                                   ROCJITSU_CODE_ARCH_RDNA4);
@@ -16083,10 +16097,10 @@ TEST(BinaryTranslatorE2E, Gfx1250RewritesCompactFormsWithExtraDecodedOperandsFor
   }
 }
 
-// With every ordinary scalar register live there is no pair to borrow. The
-// rewrite must fail rather than clobber one, and the object must come back
-// unchanged.
-TEST(BinaryTranslatorE2E, Gfx1250FailsClosedWhenNoDeadSgprPairIsAvailableForA0) {
+// With every ordinary scalar register live there is no pair to borrow. A
+// non-aliasing two-register destination is overwritten by the guest
+// instruction anyway, so stage the two 32-bit halves there instead.
+TEST(BinaryTranslatorE2E, Gfx1250StagesFlatScratchBaseInDestinationWhenSgprsAreLive) {
   constexpr uint32_t kGfx1250SEndpgm = 0xBFB00000u;
   const auto vector_read = gfx1250::build_vop3(
       gfx1250::kVAddNcU64Vop3, {.vdst = 0, .src0 = kFlatScratchBaseHiSelector, .src1 = 256 + 2});
@@ -16109,12 +16123,169 @@ TEST(BinaryTranslatorE2E, Gfx1250FailsClosedWhenNoDeadSgprPairIsAvailableForA0) 
                                rocjitsu::ProcessorRevision::Gfx1250A0));
   const auto result = translator.translate(source);
 
+  ASSERT_TRUE(result.ok()) << (result.diagnostics.empty() ? ""
+                                                          : result.diagnostics.front().message);
+  rocjitsu::AmdGpuCodeObject translated(result.elf_bytes.data(), result.elf_bytes.size());
+  ASSERT_FALSE(translated.text_sections().empty());
+  const auto *section = translated.text_sections()[0];
+  const auto *out = reinterpret_cast<const uint32_t *>(section->data());
+  const size_t out_words = section->size() / sizeof(uint32_t);
+  constexpr auto low =
+      gfx1250::build_vop1(gfx1250::kVMovB32Vop1, {.src0 = kFlatScratchBaseLoSelector, .vdst = 0});
+  constexpr auto high =
+      gfx1250::build_vop1(gfx1250::kVMovB32Vop1, {.src0 = kFlatScratchBaseHiSelector, .vdst = 1});
+  EXPECT_NE(std::ranges::find(out, out + out_words, low[0]), out + out_words);
+  EXPECT_NE(std::ranges::find(out, out + out_words, high[0]), out + out_words);
+
+  auto decoder = rocjitsu::Decoder::create(ROCJITSU_CODE_ARCH_GFX1250);
+  ASSERT_NE(decoder, nullptr);
+  bool found_rewritten_add = false;
+  for (size_t offset = 0; offset < out_words;) {
+    std::unique_ptr<rocjitsu::Instruction> inst(decoder->decode(out + offset));
+    ASSERT_NE(inst, nullptr) << "translated word " << offset << " failed to decode";
+    if (std::string_view(inst->mnemonic()) == "v_add_nc_u64") {
+      ASSERT_NE(inst->raw_encoding(), nullptr);
+      EXPECT_EQ(inst->raw_encoding()[1] & 0x1ffu, 256u)
+          << "the wide source must read staged v[0:1]";
+      found_rewritten_add = true;
+    }
+    offset += static_cast<size_t>(inst->size()) / sizeof(uint32_t);
+  }
+  EXPECT_TRUE(found_rewritten_add);
+}
+
+// The source and destination roles both select bank 1. Executing the translated
+// sequence proves that the two staging moves and the rewritten source all name
+// that physical bank, rather than merely agreeing in the encoded low byte.
+TEST(BinaryTranslatorE2E, Gfx1250DestinationStagingExecutesInMatchingNonzeroBank) {
+  constexpr uint8_t kMatchingBankOneMode = 0x41;
+  constexpr uint64_t kScratchBase = 0x1122334455667788ull;
+  constexpr uint32_t kGfx1250SEndpgm = 0xBFB00000u;
+  const auto set_vgpr_msb =
+      gfx1250::build_sopp(gfx1250::kSSetVgprMsbSopp, {.simm16 = kMatchingBankOneMode});
+  const auto vector_read = gfx1250::build_vop3(
+      gfx1250::kVAddNcU64Vop3, {.vdst = 0, .src0 = kFlatScratchBaseHiSelector, .src1 = 256 + 2});
+  std::vector<uint32_t> words = {set_vgpr_msb[0], vector_read[0], vector_read[1]};
+  for (uint16_t base = 0; base + 1 <= 101; base += 2) {
+    words.push_back(
+        gfx1250::build_sop2(gfx1250::kSAndB32Sop2, {.ssrc0 = static_cast<uint8_t>(base),
+                                                    .ssrc1 = static_cast<uint8_t>(base + 1),
+                                                    .sdst = 102})[0]);
+  }
+  words.push_back(kGfx1250SEndpgm);
+
+  auto image = rocjitsu::make_minimal_amdgpu_elf_with_descriptor_after_text(words);
+  rocjitsu::AmdGpuCodeObject source(image.data(), image.size());
+  rocjitsu::BinaryTranslator translator(
+      ROCJITSU_CODE_ARCH_GFX1250, ROCJITSU_CODE_ARCH_GFX1250, 0,
+      gfx1250_revision_options(rocjitsu::ProcessorRevision::Gfx1250B0,
+                               rocjitsu::ProcessorRevision::Gfx1250A0));
+  const auto result = translator.translate(source);
+  ASSERT_TRUE(result.ok()) << (result.diagnostics.empty() ? ""
+                                                          : result.diagnostics.front().message);
+  rocjitsu::AmdGpuCodeObject translated(result.elf_bytes.data(), result.elf_bytes.size());
+  ASSERT_FALSE(translated.text_sections().empty());
+  const auto *translated_words =
+      reinterpret_cast<const uint32_t *>(translated.text_sections()[0]->data());
+  const size_t translated_count = translated.text_sections()[0]->size() / sizeof(uint32_t);
+
+  rocjitsu::amdgpu::GpuMemory gpu_mem("gfx1250_flat_scratch_stage_mem");
+  rocjitsu::amdgpu::L2Cache l2("gfx1250_flat_scratch_stage_l2");
+  rocjitsu::amdgpu::ComputeUnitCore::Config cfg{};
+  cfg.arch = ROCJITSU_CODE_ARCH_GFX1250;
+  cfg.num_wf_slots = 1;
+  cfg.sgprs_per_wf = 106;
+  cfg.vgprs_per_wf = 1024;
+  cfg.lds_size_kb = 64;
+  auto cu =
+      rocjitsu::amdgpu::ComputeUnitCore::create("gfx1250_flat_scratch_stage", cfg, &gpu_mem, &l2);
+  ASSERT_NE(cu, nullptr);
+  auto *wf = cu->dispatch_wf(0, 0, cfg.sgprs_per_wf, cfg.vgprs_per_wf);
+  ASSERT_NE(wf, nullptr);
+  wf->set_exec(1u);
+  wf->set_scratch_base(kScratchBase);
+  const uint32_t vb = wf->vgpr_alloc().base;
+  cu->write_vgpr(vb + 2, 0, 0u);
+  cu->write_vgpr(vb + 3, 0, 0u);
+
+  auto decoder = rocjitsu::Decoder::create(ROCJITSU_CODE_ARCH_GFX1250);
+  ASSERT_NE(decoder, nullptr);
+  for (size_t offset = 0; offset < translated_count;) {
+    std::unique_ptr<rocjitsu::Instruction> inst(decoder->decode(translated_words + offset));
+    ASSERT_NE(inst, nullptr) << "translated word " << offset << " failed to decode";
+    if (std::string_view(inst->mnemonic()) == "s_endpgm")
+      break;
+    cu->execute_instruction(inst.get(), *wf);
+    offset += static_cast<size_t>(inst->size()) / sizeof(uint32_t);
+  }
+
+  EXPECT_EQ(cu->read_vgpr(vb + 256, 0), static_cast<uint32_t>(kScratchBase));
+  EXPECT_EQ(cu->read_vgpr(vb + 257, 0), static_cast<uint32_t>(kScratchBase >> 32));
+  EXPECT_EQ(wf->vgpr_msb_mode(), kMatchingBankOneMode);
+}
+
+TEST(BinaryTranslatorE2E, Gfx1250DestinationStagingRejectsMismatchedBanks) {
+  constexpr uint8_t kSourceBankOneDestinationBankTwo = 0x81;
+  constexpr uint32_t kGfx1250SEndpgm = 0xBFB00000u;
+  const auto set_vgpr_msb =
+      gfx1250::build_sopp(gfx1250::kSSetVgprMsbSopp, {.simm16 = kSourceBankOneDestinationBankTwo});
+  const auto vector_read = gfx1250::build_vop3(
+      gfx1250::kVAddNcU64Vop3, {.vdst = 0, .src0 = kFlatScratchBaseHiSelector, .src1 = 256 + 2});
+  std::vector<uint32_t> words = {set_vgpr_msb[0], vector_read[0], vector_read[1]};
+  for (uint16_t base = 0; base + 1 <= 101; base += 2) {
+    words.push_back(
+        gfx1250::build_sop2(gfx1250::kSAndB32Sop2, {.ssrc0 = static_cast<uint8_t>(base),
+                                                    .ssrc1 = static_cast<uint8_t>(base + 1),
+                                                    .sdst = 102})[0]);
+  }
+  words.push_back(kGfx1250SEndpgm);
+
+  auto image = rocjitsu::make_minimal_amdgpu_elf_with_descriptor_after_text(words);
+  rocjitsu::AmdGpuCodeObject source(image.data(), image.size());
+  rocjitsu::BinaryTranslator translator(
+      ROCJITSU_CODE_ARCH_GFX1250, ROCJITSU_CODE_ARCH_GFX1250, 0,
+      gfx1250_revision_options(rocjitsu::ProcessorRevision::Gfx1250B0,
+                               rocjitsu::ProcessorRevision::Gfx1250A0));
+  const auto result = translator.translate(source);
+
+  EXPECT_FALSE(result.ok());
+  EXPECT_FALSE(result.dispatchable());
+  EXPECT_EQ(result.elf_bytes, image);
+  EXPECT_TRUE(rocjitsu::has_error_containing(
+      result, rocjitsu::DiagnosticKind::ExpandFailed,
+      "flat-scratch-base rewrite could not allocate safe temporary storage"));
+}
+
+// Destination staging is not safe when another source reads that pair: the
+// moves would overwrite the guest input before the original instruction. With
+// all SGPRs live as well, the rewrite must fail closed.
+TEST(BinaryTranslatorE2E, Gfx1250FailsClosedWhenFlatScratchTemporariesAlias) {
+  constexpr uint32_t kGfx1250SEndpgm = 0xBFB00000u;
+  const auto vector_read = gfx1250::build_vop3(
+      gfx1250::kVAddNcU64Vop3, {.vdst = 0, .src0 = kFlatScratchBaseHiSelector, .src1 = 256});
+  std::vector<uint32_t> words = {vector_read[0], vector_read[1]};
+  for (uint16_t base = 0; base + 1 <= 101; base += 2) {
+    words.push_back(
+        gfx1250::build_sop2(gfx1250::kSAndB32Sop2, {.ssrc0 = static_cast<uint8_t>(base),
+                                                    .ssrc1 = static_cast<uint8_t>(base + 1),
+                                                    .sdst = 102})[0]);
+  }
+  words.push_back(kGfx1250SEndpgm);
+
+  auto image = rocjitsu::make_minimal_amdgpu_elf_with_descriptor_after_text(words);
+  rocjitsu::AmdGpuCodeObject source(image.data(), image.size());
+  rocjitsu::BinaryTranslator translator(
+      ROCJITSU_CODE_ARCH_GFX1250, ROCJITSU_CODE_ARCH_GFX1250, 0,
+      gfx1250_revision_options(rocjitsu::ProcessorRevision::Gfx1250B0,
+                               rocjitsu::ProcessorRevision::Gfx1250A0));
+  const auto result = translator.translate(source);
+
   EXPECT_FALSE(result.ok());
   EXPECT_FALSE(result.dispatchable());
   EXPECT_EQ(result.elf_bytes, image) << "fail-closed must leave the object unchanged";
   EXPECT_TRUE(rocjitsu::has_error_containing(
       result, rocjitsu::DiagnosticKind::ExpandFailed,
-      "flat-scratch-base rewrite could not allocate a dead SGPR pair"));
+      "flat-scratch-base rewrite could not allocate safe temporary storage"));
 }
 
 // An unmodelled encoding carrying a wide vector register whose number equals
