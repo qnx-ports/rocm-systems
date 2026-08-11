@@ -46,11 +46,25 @@ int parseAndStripNThreads(int* argc, char** argv)
         {
             nThreads = std::atoi(argv[readIdx] + kPrefixLen);
             if(nThreads < 1) nThreads = 1;
+            // Upper bound mirrors the MAX_THREADS convention already used for
+            // NCCL_SOCKET_NTHREADS in NetSocketTests.cpp: a typo'd huge value
+            // should degrade to something runnable, not exhaust the machine.
+            if(nThreads > MPIEnvironment::kMaxThreads)
+            {
+                std::fprintf(stderr,
+                             "WARNING: --net_ib_nthreads=%d exceeds maximum %d, clamping\n",
+                             nThreads,
+                             MPIEnvironment::kMaxThreads);
+                nThreads = MPIEnvironment::kMaxThreads;
+            }
             continue;
         }
         argv[writeIdx++] = argv[readIdx];
     }
     *argc = writeIdx;
+    // C/POSIX guarantee argv[argc] == NULL; MPI_Init_thread() receives this
+    // argv, so restore the terminator after compacting.
+    argv[writeIdx] = nullptr;
     return nThreads;
 }
 } // namespace
@@ -62,6 +76,11 @@ int main(int argc, char* argv[])
 
     // Initialize MPI using shared helper
     auto mpi_ctx = MPIHelpers::initializeMPI(&argc, &argv);
+
+    // Record what MPI actually granted: initializeMPI() *requests*
+    // MPI_THREAD_MULTIPLE but a given MPI build may provide less, and the
+    // multithread test paths need it to legally issue MPI calls off-thread.
+    MPIEnvironment::mpiThreadSupport = mpi_ctx.thread_support;
 
     const auto world_rank = mpi_ctx.world_rank;
     const auto world_size = mpi_ctx.world_size;

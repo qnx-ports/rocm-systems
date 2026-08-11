@@ -81,13 +81,33 @@ public:
     inline static int world_size{0};
 
     /**
+     * @brief Upper bound accepted for --net_ib_nthreads
+     *
+     * Mirrors the MAX_THREADS cap NetSocketTests.cpp applies to
+     * NCCL_SOCKET_NTHREADS: guards against a typo'd value spawning enough
+     * threads to exhaust the machine.
+     */
+    static constexpr int kMaxThreads{16};
+
+    /**
      * @brief Number of worker threads each MPI rank should fan out into
      *
      * Set from the --net_ib_nthreads=N CLI flag (parsed in main_mpi.cpp before
-     * GTest consumes argv). Defaults to 1, which preserves single-threaded
-     * behavior identical to before multithread support was added.
+     * GTest consumes argv), clamped to [1, kMaxThreads]. Defaults to 1, which
+     * preserves single-threaded behavior identical to before multithread
+     * support was added.
      */
     inline static int nThreads{1};
+
+    /**
+     * @brief Thread support level MPI actually provided at init
+     *
+     * MPI_THREAD_MULTIPLE is requested by MPIHelpers::initializeMPI(), but an
+     * MPI build may grant less. Test paths that issue MPI calls from worker
+     * threads must check this and skip when it is below MPI_THREAD_MULTIPLE,
+     * otherwise those calls are undefined behavior (typically a silent hang).
+     */
+    inline static int mpiThreadSupport{MPI_THREAD_SINGLE};
 
     /**
      * @brief Aggregated return code for test results

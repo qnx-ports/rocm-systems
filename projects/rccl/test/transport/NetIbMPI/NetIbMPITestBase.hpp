@@ -692,6 +692,35 @@ protected:
     // realistic numRanks so per-thread offsets never collide with those.
     static constexpr int kThreadTagStride = 10000;
 
+    // Both RunMultiThreaded* helpers issue MPI calls (barriers, handle
+    // exchange) from worker threads, which is only legal at
+    // MPI_THREAD_MULTIPLE. MPIHelpers::initializeMPI() requests that level but
+    // an MPI build may grant less, in which case those calls are undefined
+    // behavior and typically manifest as an unexplained hang. Skip instead.
+    bool SkipUnlessMpiThreadMultiple() {
+        if (MPIEnvironment::mpiThreadSupport >= MPI_THREAD_MULTIPLE) return false;
+        ADD_FAILURE() << "multithread mode requires MPI_THREAD_MULTIPLE ("
+                      << MPI_THREAD_MULTIPLE << "), but MPI provided "
+                      << MPIEnvironment::mpiThreadSupport
+                      << " — rerun with an MPI built for full thread support, "
+                         "or without --net_ib_nthreads";
+        return true;
+    }
+
+    // Guard against the fan-out silently not happening: if --net_ib_nthreads
+    // ever stops being parsed, nThreads falls back to 1, every test takes its
+    // single-threaded branch, and all multithread suites would still report
+    // PASS while exercising no concurrency at all. Assert on the observed
+    // thread identities so that failure mode is loud.
+    void VerifyThreadFanOut(const std::vector<std::thread::id>& observed, int nThreads) {
+        const std::set<std::thread::id> distinct(observed.begin(), observed.end());
+        if (static_cast<int>(distinct.size()) != nThreads) {
+            ADD_FAILURE() << "expected " << nThreads
+                          << " distinct worker threads, observed " << distinct.size()
+                          << " — thread fan-out did not happen";
+        }
+    }
+
     // Helper: Initialize a NET IB plugin context for one thread's exclusive
     // use. Distinct from InitNetIb()/initCtx_ (the fixture-wide single-
     // threaded path) so each thread in RunMultiThreadedIndependent gets an
@@ -795,11 +824,15 @@ protected:
     // body: ThreadResult(int threadIdx, ConnectionPair& pair)
     void RunMultiThreadedIndependent(int dev, int nThreads,
                                      std::function<ThreadResult(int, ConnectionPair&)> body) {
+        if (SkipUnlessMpiThreadMultiple()) return;
+
         const int rank     = MPIEnvironment::world_rank;
         const int peerRank = (rank + 1) % 2;
 
-        std::vector<ThreadResult> results(nThreads);
+        std::vector<ThreadResult>    results(nThreads);
+        std::vector<std::thread::id> threadIds(nThreads);
         auto worker = [&](int threadIdx) {
+            threadIds[threadIdx] = std::this_thread::get_id();
             ThreadResult& out = results[threadIdx];
             void* ctx = nullptr;
             if (InitNetIbCtx(&ctx) != ncclSuccess) {
@@ -829,6 +862,7 @@ protected:
         worker(0);
         for (auto& w : workers) w.join();
 
+        VerifyThreadFanOut(threadIds, nThreads);
         for (int t = 0; t < nThreads; t++) {
             if (!results[t].ok) ADD_FAILURE() << "thread " << t << ": " << results[t].msg;
         }
@@ -841,14 +875,21 @@ protected:
     // against the SAME sendComm/recvComm.
     // body: ThreadResult(int threadIdx)
     void RunMultiThreadedShared(int nThreads, std::function<ThreadResult(int)> body) {
-        std::vector<ThreadResult> results(nThreads);
-        auto worker = [&](int threadIdx) { results[threadIdx] = body(threadIdx); };
+        if (SkipUnlessMpiThreadMultiple()) return;
+
+        std::vector<ThreadResult>    results(nThreads);
+        std::vector<std::thread::id> threadIds(nThreads);
+        auto worker = [&](int threadIdx) {
+            threadIds[threadIdx] = std::this_thread::get_id();
+            results[threadIdx]   = body(threadIdx);
+        };
 
         std::vector<std::thread> workers;
         for (int t = nThreads - 1; t >= 1; t--) workers.emplace_back(worker, t);
         worker(0);
         for (auto& w : workers) w.join();
 
+        VerifyThreadFanOut(threadIds, nThreads);
         for (int t = 0; t < nThreads; t++) {
             if (!results[t].ok) ADD_FAILURE() << "thread " << t << ": " << results[t].msg;
         }

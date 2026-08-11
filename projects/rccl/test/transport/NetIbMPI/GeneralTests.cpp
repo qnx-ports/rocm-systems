@@ -222,9 +222,11 @@ TEST_F(NetIbMPITest, DeregisterNullHandle) {
 // Send/Recv Tests
 
 // Parameterized by MPIEnvironment::nThreads (--net_ib_nthreads=N). At the
-// default N=1, this is byte-for-byte the original single-threaded test: the
-// shared body lambda runs inline on the main thread with no std::thread
-// spawned. At N>1, RunMultiThreadedIndependent (NetIbMPITestBase.hpp) fans
+// default N=1, behavior matches the original single-threaded test (same
+// connection setup, same barrier between post and wait): the shared body
+// lambda runs inline on the main thread with no std::thread spawned. At N>1,
+// the barrier is dropped (see runSendRecv) and
+// RunMultiThreadedIndependent (NetIbMPITestBase.hpp) fans
 // out N threads, each opening its own connection to the peer rank's
 // correspondingly-indexed thread and running this same body concurrently —
 // stressing the net-ib plugin's init/listen/connect/accept thread-safety.
@@ -243,7 +245,7 @@ TEST_F(NetIbMPITest, SimpleSendRecv) {
     const int senderRank = 1;
     const int nThreads = MPIEnvironment::nThreads;
 
-    auto body = [&](int /*threadIdx*/, ConnectionPair& pair) -> ThreadResult {
+    auto runSendRecv = [&](ConnectionPair& pair, bool useBarrier) -> ThreadResult {
         ThreadResult result;
         const size_t bufferSize = kSmallBufferSize;
         const int tag = 42;
@@ -283,6 +285,12 @@ TEST_F(NetIbMPITest, SimpleSendRecv) {
             } while (request == nullptr);
         }
 
+        // Ensure both ranks have posted before either waits. Preserved from the
+        // original single-threaded test; skipped on the multithreaded path,
+        // where each thread has an independent connection and no shared pacing,
+        // so a global MPI_Barrier here would deadlock/misalign.
+        if (useBarrier) MPI_Barrier(MPI_COMM_WORLD);
+
         int sizes[1] = {0};
         if (request == nullptr) { result.ok = false; result.msg = "request NULL before wait"; return result; }
         if (WaitForCompletion(request, sizes) != ncclSuccess) {
@@ -305,12 +313,14 @@ TEST_F(NetIbMPITest, SimpleSendRecv) {
         NetConnectionGuard connGuard(net_);
         SetupConnectionWithGuard(0, pair, connGuard);
 
-        ThreadResult result = body(0, pair);
+        ThreadResult result = runSendRecv(pair, /*useBarrier=*/true);
         EXPECT_TRUE(result.ok) << result.msg;
         return;
     }
 
-    RunMultiThreadedIndependent(0, nThreads, body);
+    RunMultiThreadedIndependent(0, nThreads, [&](int /*threadIdx*/, ConnectionPair& pair) -> ThreadResult {
+        return runSendRecv(pair, /*useBarrier=*/false);
+    });
 }
 
 // Parameterized by MPIEnvironment::nThreads. At N=1, runs exactly as before

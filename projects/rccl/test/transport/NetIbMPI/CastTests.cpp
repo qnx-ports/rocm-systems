@@ -1259,11 +1259,15 @@ TEST_F(NetIbMPITest, CastLargeTransfer) {
     // just close the comms (TeardownConnection's unconditional
     // DeregisterMemory would fail here since there's no single shared
     // mhandle left to deregister).
+    //
+    // EXPECT_, not ASSERT_: a fatal assertion here returns from the test body
+    // before MPI_Barrier, leaving the peer rank blocked in it forever. Record
+    // the failure and still reach the barrier.
     if (rank == 0) {
-        ASSERT_EQ(CloseRecvComm(recvComm), ncclSuccess);
-        ASSERT_EQ(CloseListenComm(listenComm), ncclSuccess);
+        EXPECT_EQ(CloseRecvComm(recvComm), ncclSuccess);
+        EXPECT_EQ(CloseListenComm(listenComm), ncclSuccess);
     } else {
-        ASSERT_EQ(CloseSendComm(sendComm), ncclSuccess);
+        EXPECT_EQ(CloseSendComm(sendComm), ncclSuccess);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 }
