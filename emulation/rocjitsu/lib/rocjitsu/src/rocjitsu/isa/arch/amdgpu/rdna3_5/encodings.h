@@ -359,6 +359,7 @@ public:
   bool has_lit_0();
   using OpEncoding = Sop1MachineInst;
   const OpEncoding inst_;
+  std::array<uint32_t, 2> raw_words_{};
 };
 
 class Sopc : public IsaInstruction<Isa> {
@@ -370,6 +371,7 @@ public:
   bool has_lit_0_has_lit_1();
   using OpEncoding = SopcMachineInst;
   const OpEncoding inst_;
+  std::array<uint32_t, 2> raw_words_{};
 };
 
 class Sopp : public IsaInstruction<Isa> {
@@ -387,6 +389,7 @@ public:
   bool hasImpliedLiteral();
   using OpEncoding = SopkMachineInst;
   const OpEncoding inst_;
+  std::array<uint32_t, 2> raw_words_{};
   uint32_t literal_ = 0;
 };
 
@@ -400,6 +403,7 @@ public:
   bool hasImpliedLiteral();
   using OpEncoding = Sop2MachineInst;
   const OpEncoding inst_;
+  std::array<uint32_t, 2> raw_words_{};
   uint32_t literal_ = 0;
 };
 
@@ -426,8 +430,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
   uint32_t sdwa_src0_sel_ = amdgpu::sdwa::DWORD;
   bool sdwa_src0_sext_ = false;
   bool sdwa_src0_neg_ = false;
@@ -455,8 +459,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
   uint32_t sdwa_src0_sel_ = amdgpu::sdwa::DWORD;
   bool sdwa_src0_sext_ = false;
   bool sdwa_src0_neg_ = false;
@@ -486,8 +490,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
   uint32_t sdwa_src0_sel_ = amdgpu::sdwa::DWORD;
   bool sdwa_src0_sext_ = false;
   bool sdwa_src0_neg_ = false;
@@ -521,8 +525,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
 };
 
 class Vop3p : public IsaInstruction<Isa> {
@@ -545,8 +549,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
 };
 
 class Vinterp : public IsaInstruction<Isa> {
@@ -632,8 +636,8 @@ public:
   uint32_t dpp_bound_ctrl_ = 0;
   uint32_t dpp_fi_ = 1;
   uint32_t dpp8_lane_sel_ = 0;
-  std::unique_ptr<DppOperand> dpp_src0_;
-  std::unique_ptr<DppOperand> dpp_src1_;
+  std::unique_ptr<StagedOperand> dpp_src0_;
+  std::unique_ptr<StagedOperand> dpp_src1_;
 };
 
 } // namespace rdna3_5
