@@ -723,22 +723,28 @@ protected:
             if (CreateListenCommCtx(ctx, dev, &pair.handle, &pair.listenComm) != ncclSuccess) {
                 result.ok = false;
                 result.msg = "CreateListenComm failed";
-                return result;
             }
+            // Always send exactly one handle message, even on failure (with
+            // whatever handle bytes we have) — the peer's MPI_Recv below is
+            // unconditional, so a silent early-return here would strand it
+            // blocked forever. A bad handle just makes the peer's own
+            // connect attempt fail, which it reports independently.
             MPI_Send(&pair.handle, sizeof(ncclNetHandle_t), MPI_BYTE, peerRank, mpiTag, MPI_COMM_WORLD);
-            for (int attempts = 0; pair.recvComm == nullptr; attempts++) {
-                if (AcceptConnection(pair.listenComm, &pair.recvComm) != ncclSuccess) {
-                    result.ok = false;
-                    result.msg = "AcceptConnection error";
-                    return result;
-                }
-                if (pair.recvComm == nullptr) {
-                    if (attempts >= kMaxRetryAttempts) {
+            if (result.ok) {
+                for (int attempts = 0; pair.recvComm == nullptr; attempts++) {
+                    if (AcceptConnection(pair.listenComm, &pair.recvComm) != ncclSuccess) {
                         result.ok = false;
-                        result.msg = "AcceptConnection timed out";
-                        return result;
+                        result.msg = "AcceptConnection error";
+                        break;
                     }
-                    usleep(kPollIntervalUs);
+                    if (pair.recvComm == nullptr) {
+                        if (attempts >= kMaxRetryAttempts) {
+                            result.ok = false;
+                            result.msg = "AcceptConnection timed out";
+                            break;
+                        }
+                        usleep(kPollIntervalUs);
+                    }
                 }
             }
         } else {
@@ -748,13 +754,13 @@ protected:
                 if (ConnectToRemoteCtx(ctx, dev, &pair.handle, &pair.sendComm) != ncclSuccess) {
                     result.ok = false;
                     result.msg = "ConnectToRemote error";
-                    return result;
+                    break;
                 }
                 if (pair.sendComm == nullptr) {
                     if (attempts >= kMaxRetryAttempts) {
                         result.ok = false;
                         result.msg = "ConnectToRemote timed out";
-                        return result;
+                        break;
                     }
                     usleep(kPollIntervalUs);
                 }
@@ -762,7 +768,10 @@ protected:
         }
         // Barrier carries no data, so nThreads*2 concurrent calls on
         // MPI_COMM_WORLD are safe: only the call *count* must match across
-        // ranks, not which thread's call pairs with which.
+        // ranks, not which thread's call pairs with which. Every path above
+        // falls through to here (break, not return) so a failure on either
+        // side can never strand its peer waiting on a Send/Recv/Barrier that
+        // will never come.
         MPI_Barrier(MPI_COMM_WORLD);
         return result;
     }
@@ -803,7 +812,12 @@ protected:
             ThreadResult setupResult = SetupConnectionForThread(ctx, dev, pair, rank, peerRank, tag);
             if (!setupResult.ok) {
                 out = setupResult;
-                net_->finalize(ctx);
+                // Use the full teardown, not a bare finalize(ctx): setup may
+                // have already created listenComm/recvComm/sendComm before
+                // failing, and finalize() only frees ctx (net_ib.cc's
+                // ncclIbFinalize does free(ctx) + ncclIbFinalizeDevices(),
+                // nothing else) — it never closes comm handles.
+                TeardownConnectionForThread(ctx, pair, rank);
                 return;
             }
             out = body(threadIdx, pair);
