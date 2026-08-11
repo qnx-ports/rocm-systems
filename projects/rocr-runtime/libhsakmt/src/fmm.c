@@ -27,7 +27,11 @@
 #include "libhsakmt.h"
 #include "fmm.h"
 #include "hsakmt/hsakmtmodel.h"
+#if defined(__QNXNTO__)
+#include "hsakmt/qnx/kfd_ioctl.h"
+#else
 #include "hsakmt/linux/kfd_ioctl.h"
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,15 +44,19 @@
 #include <errno.h>
 #include <assert.h>
 
+#ifndef __QNXNTO__
 #include <numa.h>
 #include <numaif.h>
+#endif
 #include "rbtree.h"
 #include <amdgpu.h>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#ifndef __QNXNTO__
 #include "hsakmt/linux/udmabuf.h"
+#endif
 
 #ifndef MPOL_F_STATIC_NODES
 /* Bug in numaif.h, this should be defined in there. Definition copied
@@ -689,8 +697,10 @@ static void reserved_aperture_release(manageable_aperture_t *app,
 	if (app->is_cpu_accessible) {
 		void *mmap_ret;
 
+#ifndef __QNXNTO__
 		/* Reset NUMA policy */
 		mbind(address, MemorySizeInBytes, MPOL_DEFAULT, NULL, 0, 0);
+#endif
 
 		/* Remove any CPU mapping, but keep the address range reserved */
 		mmap_ret = mmap(address, MemorySizeInBytes, PROT_NONE,
@@ -911,8 +921,10 @@ static void mmap_aperture_release(manageable_aperture_t *aper,
 		return;
 	}
 
+#ifndef __QNXNTO__
 	/* Reset NUMA policy */
 	mbind(addr, size, MPOL_DEFAULT, NULL, 0, 0);
+#endif
 
 	/* Unmap memory */
 	munmap(addr, size);
@@ -1610,7 +1622,11 @@ static void *__fmm_allocate_device(HsaKFDContext *ctx,
 
 static void *fmm_map_to_cpu(void *mem, uint64_t size, bool host_access,
 			    int fd, uint64_t mmap_offset) {
+#if defined(__QNXNTO__)
+	int flag = MAP_SHARED | MAP_FIXED | MAP_NOINHERIT;
+#else
 	int flag = MAP_SHARED | MAP_FIXED;
+#endif
 	int prot = host_access ? PROT_READ | PROT_WRITE : PROT_NONE;
 	void *ret = mmap(mem, size, prot, flag, fd, mmap_offset);
 
@@ -1655,6 +1671,7 @@ static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
 	return mem;
 }
 
+#ifndef __QNXNTO__
 /* use udmabuf driver to allocate buf */
 static void* udmabuf_allocation(HsaKFDContext *ctx,
                                uint32_t gpu_id, uint32_t node_id, uint64_t size,
@@ -1775,6 +1792,7 @@ error_release_memfd:
 
 	return NULL;
 }
+#endif /* __QNXNTO__ */
 
 void *hsakmt_fmm_allocate_device(HsaKFDContext *ctx,
 			  uint32_t gpu_id, uint32_t node_id, void *address,
@@ -1829,6 +1847,7 @@ void *hsakmt_fmm_allocate_device(HsaKFDContext *ctx,
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_CONTIGUOUS_BEST_EFFORT;
 
 	mem = NULL;
+#ifndef __QNXNTO__
 	if (hsakmt_udmabuf_dev_fd > 0 && aperture == svm.dgpu_aperture && !hsakmt_is_dgpu
 		 && aperture->ops == &mmap_aperture_ops) {
 		mem  = udmabuf_allocation(ctx, gpu_id, node_id, size, aperture, alignment,
@@ -1837,6 +1856,7 @@ void *hsakmt_fmm_allocate_device(HsaKFDContext *ctx,
 		if (!mem)
 			pr_debug("udmabuf_allocation allocation fail\n");
 	}
+#endif
 
 	/* env HSA_USE_UDMABUF not set, or not apu, or cannot use udmabuf,
 	 * fall back to use device driver to allocate memory
@@ -1967,6 +1987,19 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
+#ifdef __QNXNTO__
+static int bind_mem_to_numa(uint32_t numa_node_id, void *mem,
+			    uint64_t SizeInBytes, HsaMemFlags mflags)
+{
+	pr_debug("%s mem %p flags 0x%x size 0x%lx node_id %d (no-op on QNX)\n",
+		__func__, mem, mflags.Value, SizeInBytes, numa_node_id);
+
+	if (mflags.ui32.NoSubstitute)
+		return -EFAULT;
+
+	return 0;
+}
+#else
 static int bind_mem_to_numa(uint32_t numa_node_id, void *mem,
 			    uint64_t SizeInBytes, HsaMemFlags mflags)
 {
@@ -2034,6 +2067,7 @@ static int bind_mem_to_numa(uint32_t numa_node_id, void *mem,
 
 	return 0;
 }
+#endif /* __QNXNTO__ */
 
 static void *fmm_allocate_host_gpu(HsaKFDContext *ctx,
 				   uint32_t gpu_id, uint32_t node_id, void *address,

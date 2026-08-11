@@ -31,7 +31,11 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <stdio.h>
+#if defined(__QNXNTO__)
+#include "hsakmt/qnx/kfd_ioctl.h"
+#else
 #include "hsakmt/linux/kfd_ioctl.h"
+#endif
 #include "fmm.h"
 #include "hsakmt/hsakmtmodel.h"
 #include <assert.h>

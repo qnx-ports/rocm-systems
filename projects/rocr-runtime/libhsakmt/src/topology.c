@@ -35,7 +35,9 @@
 #include <limits.h>
 
 #include <errno.h>
+#ifndef __QNXNTO__
 #include <sys/sysinfo.h>
+#endif
 #include <xf86drm.h>
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
@@ -57,6 +59,10 @@
 #define KFD_SYSFS_PATH_GENERATION_ID "%s/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "%s/system_properties"
 #define KFD_SYSFS_PATH_NODES "%s/nodes"
+
+#if defined(__QNXNTO__)
+#define get_nprocs()       sysconf(_SC_NPROCESSORS_ONLN)
+#endif
 
 static const char *get_topology_dir(void)
 {

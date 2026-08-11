@@ -25,7 +25,11 @@
 
 #include "libhsakmt.h"
 #include "fmm.h"
+#if defined(__QNXNTO__)
+#include "hsakmt/qnx/kfd_ioctl.h"
+#else
 #include "hsakmt/linux/kfd_ioctl.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -583,7 +587,11 @@ static int handle_concrete_asic(HsaKFDContext *ctx,
 
 			pr_info("Allocating GTT for CWSR\n");
 			void *addr = hsakmt_mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+#if defined(__QNXNTO__)
+						     MAP_ANONYMOUS | MAP_PRIVATE | MAP_NOINHERIT,
+#else
 						     MAP_ANONYMOUS | MAP_PRIVATE,
+#endif
 						     size, GPU_HUGE_PAGE_SIZE, 0,
 						     0, (void *)LONG_MAX, -1);
 			if (!addr) {

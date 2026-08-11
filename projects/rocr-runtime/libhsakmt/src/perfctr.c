@@ -26,13 +26,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <linux/perf_event.h>
-#include <sys/syscall.h>
-#include "libhsakmt.h"
-#include "pmc_table.h"
-#include "hsakmt/linux/kfd_ioctl.h"
 #include <unistd.h>
 #include <sys/ioctl.h>
+#if defined(__QNXNTO__)
+#include "hsakmt/qnx/kfd_ioctl.h"
+#else
+#include <linux/perf_event.h>
+#include <sys/syscall.h>
+#include "hsakmt/linux/kfd_ioctl.h"
+#endif
+#include "libhsakmt.h"
+#include "pmc_table.h"
 #include <errno.h>
 #include <sys/mman.h>
 #include <fcntl.h>

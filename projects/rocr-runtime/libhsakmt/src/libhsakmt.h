@@ -26,7 +26,11 @@
 #ifndef LIBHSAKMT_H_INCLUDED
 #define LIBHSAKMT_H_INCLUDED
 
+#if defined(__QNXNTO__)
+#include "hsakmt/qnx/kfd_ioctl.h"
+#else
 #include "hsakmt/linux/kfd_ioctl.h"
+#endif
 #include "hsakmt/hsakmt.h"
 #include "kfdcontext.h"
 #include "hsakmtctx.h"
