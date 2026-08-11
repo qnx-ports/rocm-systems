@@ -15,6 +15,7 @@ Run locally:
 import re
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -262,6 +263,31 @@ class ForbiddenFileTests(unittest.TestCase):
         self.assertIn("secret.pem", body)
         # Forbidden Files is warning-only — it never adds the label.
 
+
+# ----------------------------- check runs -------------------------------------
+
+
+class CheckRunTests(unittest.TestCase):
+    def test_get_check_runs_fetches_all_pages(self) -> None:
+        pages = [
+            {
+                "total_count": 119,
+                "check_runs": [{"name": f"run-{i}"} for i in range(100)],
+            },
+            {
+                "total_count": 119,
+                "check_runs": [{"name": f"run-{i}"} for i in range(100, 119)],
+            },
+        ]
+        with mock.patch.object(pc, "gh_get", side_effect=pages) as gh_get:
+            runs = pc.get_check_runs("ROCm", "rocm-systems", "abc123", "token")
+
+        self.assertEqual(len(runs), 119)
+        self.assertEqual(runs[0]["name"], "run-0")
+        self.assertEqual(runs[-1]["name"], "run-118")
+        self.assertEqual(gh_get.call_count, 2)
+        self.assertTrue(gh_get.call_args_list[0].args[0].endswith("&page=1"))
+        self.assertTrue(gh_get.call_args_list[1].args[0].endswith("&page=2"))
 
 # ----------------------------- unit tests check ------------------------------
 
