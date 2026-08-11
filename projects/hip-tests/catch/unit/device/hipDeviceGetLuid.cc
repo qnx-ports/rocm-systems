@@ -99,13 +99,13 @@ HIP_TEST_CASE(Unit_hipDeviceGetLuid_VerifyLuidFrm_hipGetDeviceProperties) {
  * ------------------------
  *  - Validates handling of invalid arguments:
  *    -# When the output LUID pointer is `nullptr`
- *      - Expected output: do not return `hipSuccess`
+ *      - Expected output: return `hipErrorInvalidValue`
  *    -# When the output device node mask pointer is `nullptr`
- *      - Expected output: do not return `hipSuccess`
+ *      - Expected output: return `hipErrorInvalidValue`
  *    -# When the device ordinal is negative
- *      - Expected output: do not return `hipSuccess`
+ *      - Expected output: return `hipErrorInvalidDevice`
  *    -# When the device ordinal is out of bounds
- *      - Expected output: do not return `hipSuccess`
+ *      - Expected output: return `hipErrorInvalidDevice`
  * Test source
  * ------------------------
  *  - unit/device/hipDeviceGetLuid.cc
@@ -124,10 +124,10 @@ HIP_TEST_CASE(Unit_hipDeviceGetLuid_Negative) {
     char luid[LUID_LEN] = {0};
     unsigned int deviceNodeMask = 0;
 
-    REQUIRE_FALSE(hipSuccess == hipDeviceGetLuid(nullptr, &deviceNodeMask, device));
-    REQUIRE_FALSE(hipSuccess == hipDeviceGetLuid(luid, nullptr, device));
-    REQUIRE_FALSE(hipSuccess == hipDeviceGetLuid(luid, &deviceNodeMask, -1));
-    REQUIRE_FALSE(hipSuccess == hipDeviceGetLuid(luid, &deviceNodeMask, numDevices));
+    REQUIRE(hipErrorInvalidValue == hipDeviceGetLuid(nullptr, &deviceNodeMask, device));
+    REQUIRE(hipErrorInvalidValue == hipDeviceGetLuid(luid, nullptr, device));
+    REQUIRE(hipErrorInvalidDevice == hipDeviceGetLuid(luid, &deviceNodeMask, -1));
+    REQUIRE(hipErrorInvalidDevice == hipDeviceGetLuid(luid, &deviceNodeMask, numDevices));
   }
 }
 
