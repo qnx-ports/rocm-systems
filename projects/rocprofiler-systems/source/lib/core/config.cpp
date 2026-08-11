@@ -1405,7 +1405,8 @@ configure_settings(bool _init)
         // Prevent Timemory's read() silently dropping JSON config files without proper
         // root. Non-existing JSONs should not throw: default ROCPROFSYS_CONFIG_FILE
         // includes '~/.rocprofiler-systems.json' that can be missing
-        if(expanded_filename.ends_with(".json") && filepath::exists(expanded_filename) &&
+        if(expanded_filename.ends_with(".json") &&
+           path::is_regular_file(expanded_filename) &&
            !json_has_project_name_root(expanded_filename))
         {
             throw std::runtime_error(
@@ -3335,7 +3336,7 @@ tmp_file::~tmp_file()
 void
 tmp_file::touch() const
 {
-    if(!filepath::exists(filename))
+    if(!path::is_regular_file(filename))
     {
         // if the filepath does not exist, open in out mode to create it
         auto _ofs = std::ofstream{};
@@ -3460,7 +3461,7 @@ tmp_file::remove()
     if(m_pid != getpid()) return false;
 
     close();
-    if(filepath::exists(filename))
+    if(path::is_regular_file(filename))
     {
         LOG_DEBUG("Removing temporary file '{}'...", filename);
         auto _ret = ::remove(filename.c_str());
