@@ -35,6 +35,7 @@
 #include "rocjitsu/isa/decoder.h"
 #include "rocjitsu/isa/instruction.h"
 #include "rocjitsu/isa/isa_traits.h"
+#include "util/except.h"
 
 #include <algorithm>
 #include <array>
@@ -128,7 +129,13 @@ generated_branch_island_pool_offsets(std::span<const uint8_t> text, rj_code_arch
       const uint64_t slot_offset =
           offset + (kGeneratedIslandPoolHeaderWords + slot) * sizeof(uint32_t);
       uint32_t slot_word = text_word_at(text, slot_offset);
-      std::unique_ptr<Instruction> slot_inst(decoder->decode(&slot_word));
+      std::unique_ptr<Instruction> slot_inst;
+      try {
+        slot_inst.reset(decoder->decode(&slot_word));
+      } catch (const util::InvalidInst &) {
+        has_canonical_slots = false;
+        break;
+      }
       if (!slot_inst || slot_inst->size() != static_cast<int>(sizeof(uint32_t)) ||
           slot_inst->mnemonic() != "s_branch" || !slot_inst->branch_offset_bytes()) {
         has_canonical_slots = false;
@@ -1455,8 +1462,15 @@ TranslatedCodeObject BinaryTranslator::translate(const AmdGpuCodeObject &obj) {
   // helper block, Phase 3 emits that helper into both relocated bodies so every
   // branch or call target can be resolved through the current kernel's placement
   // map without borrowing another kernel's return continuation.
-  auto blocks = BasicBlock::build(obj, *decoder, guest_arch_, block_leaders,
-                                  ExternalEntryPolicy::ExplicitOnly);
+  std::vector<std::unique_ptr<BasicBlock>> blocks;
+  try {
+    blocks = BasicBlock::build(obj, *decoder, guest_arch_, block_leaders,
+                               ExternalEntryPolicy::ExplicitOnly);
+  } catch (const util::InvalidInst &error) {
+    append_error(result.diagnostics, DiagnosticKind::Legalization,
+                 std::string("failed to decode guest .text: ") + error.what());
+    return leave_unchanged();
+  }
   const BlockOffsetIndex block_index = build_block_offset_index(blocks);
   const uint64_t text_vaddr = obj.text_sections().front()->vaddr();
   const auto relocation_pair_analysis =

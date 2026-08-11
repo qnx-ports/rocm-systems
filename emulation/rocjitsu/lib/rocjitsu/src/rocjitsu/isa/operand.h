@@ -84,6 +84,10 @@ public:
       : size_bits_(size_bits), encoding_value_(encoding_value) {}
   virtual ~Operand() = default;
 
+  /// Validate encoding constraints deferred until the complete instruction is
+  /// decoded. Literal sentinels may replace their provisional operands first.
+  void validate_encoding() const;
+
   /// @brief Human-readable name for this operand (e.g. "v0", "s4", or a literal).
   virtual std::string name() const { return std::to_string(encoding_value_); }
 
@@ -298,6 +302,8 @@ public:
   amdgpu::VgprMsbRole vgpr_msb_role_ = amdgpu::VgprMsbRole::None;
 
 protected:
+  void defer_encoding_error(const char *message) { encoding_error_ = message; }
+
   /// @brief Capability/role flags, set once at construction and never
   /// mutated afterward. Subclass constructors set is_vgpr_; fieldless
   /// operands get their (reads_value, writable, is_vgpr) triple from
@@ -312,6 +318,7 @@ protected:
   bool reads_value_ = true;
   bool writable_ = true;
   bool fieldless_ = false;
+  const char *encoding_error_ = nullptr;
 
 private:
   // Private SIMD fast-path backend for RegisterAccess.

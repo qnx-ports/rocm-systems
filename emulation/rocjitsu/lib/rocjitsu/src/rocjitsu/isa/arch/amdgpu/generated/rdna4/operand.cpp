@@ -68,8 +68,23 @@ Operand::Operand(int size_bits, OperandType opr_type, int encoding_value, bool p
                  bool packed_16bit_dst)
     : AmdgpuIsaOperand<Isa>(size_bits, opr_type, encoding_value),
       packed_16bit_source_(packed_16bit_source), packed_16bit_dst_(packed_16bit_dst) {
-  if (opr_type == OperandType::OPR_SREG && encoding_value > 124)
-    throw util::InvalidInst("invalid scalar register selector", "");
+  if (opr_type == OperandType::OPR_SREG && !((encoding_value >= 0 && encoding_value <= 124))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
+  if (opr_type == OperandType::OPR_SREG_LITERAL &&
+      !((encoding_value >= 0 && encoding_value <= 124) ||
+        (encoding_value >= 255 && encoding_value <= 255))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
+  if (opr_type == OperandType::OPR_SREG_M0 && !((encoding_value >= 0 && encoding_value <= 125))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
   if (opr_type == OperandType::OPR_SSRC_LANESEL &&
       !((encoding_value >= 0 && encoding_value <= 125) ||
         (encoding_value >= 128 && encoding_value <= 191)))
@@ -99,8 +114,23 @@ Operand::Operand(int size_bits, OperandType opr_type, int encoding_value,
     : AmdgpuIsaOperand<Isa>(size_bits, opr_type, encoding_value),
       literal16_display_value_(literal16_display_value),
       has_literal16_display_(has_literal16_display) {
-  if (opr_type == OperandType::OPR_SREG && encoding_value > 124)
-    throw util::InvalidInst("invalid scalar register selector", "");
+  if (opr_type == OperandType::OPR_SREG && !((encoding_value >= 0 && encoding_value <= 124))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
+  if (opr_type == OperandType::OPR_SREG_LITERAL &&
+      !((encoding_value >= 0 && encoding_value <= 124) ||
+        (encoding_value >= 255 && encoding_value <= 255))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
+  if (opr_type == OperandType::OPR_SREG_M0 && !((encoding_value >= 0 && encoding_value <= 125))) {
+    defer_encoding_error("invalid scalar register selector");
+    if (encoding_value != 254 && encoding_value != 255)
+      validate_encoding();
+  }
   if (opr_type == OperandType::OPR_SSRC_LANESEL &&
       !((encoding_value >= 0 && encoding_value <= 125) ||
         (encoding_value >= 128 && encoding_value <= 191)))
