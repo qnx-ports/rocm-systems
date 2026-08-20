@@ -50,6 +50,8 @@
 #include <libelf.h>
 #if defined(__linux__)
 #include <link.h>
+#elif defined(__QNXNTO__)
+#include <sys/link.h>
 #endif
 #include <list>
 #include <string>

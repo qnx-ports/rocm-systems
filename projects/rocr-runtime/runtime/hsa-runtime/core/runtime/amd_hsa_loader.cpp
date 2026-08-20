@@ -50,6 +50,17 @@
 #include <linux/limits.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#elif defined(__QNXNTO__)
+#include <sys/link.h>
+#include <sys/elf.h>
+#include <limits.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#if __PTR_BITS__ == 64
+#define ElfW(type) Elf64_##type
+#else
+#define ElfW(type) Elf32_##type
+#endif
 #else
 #include <cstdint>
 #endif
@@ -116,7 +127,11 @@ std::string GetUriFromMemoryInExecutableFile(const void *memory, size_t size) {
 
   // Iterate the loaded shared objects program headers to see if the ELF binary
   // is allocated in a mapped file.
+#if defined(__QNXNTO__)
+  if (dl_iterate_phdr([](const struct dl_phdr_info *info, size_t size, void *ptr) -> int {
+#else
   if (dl_iterate_phdr([](struct dl_phdr_info *info, size_t size, void *ptr) -> int {
+#endif  
     struct callback_data_s *callback_data = (struct callback_data_s *) ptr;
     const ElfW(Addr) elf_address = callback_data->address - info->dlpi_addr;
 

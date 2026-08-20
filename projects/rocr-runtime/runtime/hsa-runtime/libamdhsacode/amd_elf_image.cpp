@@ -86,12 +86,46 @@
 #define _write write
 #define _lseek lseek
 #define _ftruncate ftruncate
+#if defined(__QNXNTO__)
+#include <errno.h>
+#else
 #include <sys/sendfile.h>
+#endif
 #else
 #define _ftruncate _chsize
 #endif // !_WIN32
 
 #endif // !USE_MEMFILE
+
+#if defined(__QNXNTO__)
+static ssize_t CopyFileContents(int out_fd, int in_fd, size_t count) {
+  char buffer[64 * 1024];
+  size_t remaining = count;
+  ssize_t copied = 0;
+
+  while (remaining > 0) {
+    ssize_t in_bytes = read(in_fd, buffer, std::min(remaining, sizeof(buffer)));
+    if (in_bytes < 0) {
+      if (errno == EINTR) continue;
+      return -1;
+    }
+    if (in_bytes == 0) break;
+
+    for (ssize_t done = 0; done < in_bytes;) {
+      ssize_t out_bytes = write(out_fd, buffer + done, in_bytes - done);
+      if (out_bytes < 0) {
+        if (errno == EINTR) continue;
+        return -1;
+      }
+      done += out_bytes;
+    }
+
+    copied += in_bytes;
+    remaining -= static_cast<size_t>(in_bytes);
+  }
+  return copied;
+}
+#endif // __QNXNTO__
 
 #if !defined(BSD_LIBELF)
   #define elf_setshstrndx elfx_update_shstrndx
@@ -229,7 +263,11 @@ namespace elf {
       if (_lseek(d, 0L, SEEK_SET) < 0) { return perror("lseek(3) failed"); }
       ssize_t written;
       do {
+#if defined(__QNXNTO__)
+        written = CopyFileContents(d, in, static_cast<size_t>(size));
+#else
         written = sendfile(d, in, NULL, size);
+#endif
         if (written < 0) {
           _close(in);
           return perror("sendfile failed");

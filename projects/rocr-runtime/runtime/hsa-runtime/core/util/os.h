@@ -64,7 +64,7 @@ typedef enum {
   OS_THREAD_PRIORITY_MAX        = 255,
 } ThreadPriority;
 
-enum class os_t { OS_WIN = 0, OS_LINUX, COUNT };
+enum class os_t { OS_WIN = 0, OS_LINUX, OS_QNX, COUNT };
 static __forceinline std::underlying_type<os_t>::type os_index(os_t val) {
   return std::underlying_type<os_t>::type(val);
 }
@@ -73,6 +73,8 @@ static __forceinline std::underlying_type<os_t>::type os_index(os_t val) {
 static const os_t current_os = os_t::OS_WIN;
 #elif __linux__
 static const os_t current_os = os_t::OS_LINUX;
+#elif __QNXNTO__
+static const os_t current_os = os_t::OS_QNX;
 #else
 static_assert(false, "Operating System not detected!");
 #endif

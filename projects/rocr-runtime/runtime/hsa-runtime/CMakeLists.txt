@@ -49,7 +49,7 @@ unset ( hsa-runtime64_LIB_DEPENDS CACHE )
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 if (UNIX)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 else()
   set(CMAKE_CXX_STANDARD 20)
 endif()
@@ -109,7 +109,11 @@ set_property(TARGET  ${CORE_RUNTIME_TARGET} PROPERTY OUTPUT_NAME ${CORE_RUNTIME_
 
 ## Compiler preproc definitions.
 if (UNIX)
-  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE "${HSA_COMMON_DEFS}" __linux__ HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
+  set(HSA_PLATFORM_DEFS "")
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "QNX")
+    list(APPEND HSA_PLATFORM_DEFS __linux__)
+  endif()
+  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE "${HSA_COMMON_DEFS}" ${HSA_PLATFORM_DEFS} HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
   ROCR_BUILD_ID="${PACKAGE_VERSION_STRING}-${VERSION_JOB}-${VERSION_HASH}" )
   
   ## Check for memfd_create syscall
@@ -149,7 +153,11 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 if (UNIX)
-  set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
+  set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
+
+  if ( NOT CMAKE_SYSTEM_NAME STREQUAL "QNX" )
+    set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -fms-extensions )
+  endif()
 
   ## Extra x86 specific settings
   if ( CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
@@ -226,11 +234,17 @@ set ( SRCS core/driver/driver.cpp
            libamdhsacode/amd_hsa_code.cpp)
 
 if(UNIX)
-  set(SRC_OS core/util/lnx/os_linux.cpp
-	     libamdhsacode/lnx/amd_core_dump.cpp)
-  set(SRC_XDNA core/driver/xdna/amd_xdna_driver.cpp
-               core/runtime/amd_aie_agent.cpp
-               core/runtime/amd_aie_aql_queue.cpp)
+  if(CMAKE_SYSTEM_NAME STREQUAL "QNX")
+    set(SRC_OS core/util/qnx/os_qnx.cpp
+	       libamdhsacode/qnx/amd_core_dump.cpp)
+    set(SRC_XDNA "")
+  else()
+    set(SRC_OS core/util/lnx/os_linux.cpp
+	       libamdhsacode/lnx/amd_core_dump.cpp)
+    set(SRC_XDNA core/driver/xdna/amd_xdna_driver.cpp
+                 core/runtime/amd_aie_agent.cpp
+                 core/runtime/amd_aie_aql_queue.cpp)
+  endif()
 else()
   target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE NOMINMAX)
   set(SRC_OS core/util/win/os_win.cpp

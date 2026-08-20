@@ -45,10 +45,14 @@
 #include <memory>
 #include <string>
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__QNXNTO__)
 #include <amdgpu_drm.h>
-#include <link.h>
 #include <sys/ioctl.h>
+#if defined(__linux__)
+#include <link.h>
+#elif defined(__QNXNTO__)
+#include <sys/link.h>
+#endif
 #endif
 
 #include "hsakmt/hsakmt.h"
@@ -66,7 +70,7 @@ extern r_debug _amdgpu_r_debug;
 namespace rocr {
 namespace AMD {
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__QNXNTO__)
 static_assert(
     (sizeof(core::ShareableHandle::handle) >= sizeof(amdgpu_bo_handle)) &&
         (alignof(core::ShareableHandle::handle) >= alignof(amdgpu_bo_handle)),

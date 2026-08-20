@@ -62,6 +62,10 @@
 #include <sys/mman.h>
 #endif
 
+#ifdef __QNXNTO__
+#define MAP_NORESERVE  0x00000000
+#endif
+
 namespace rocr {
 namespace {
 

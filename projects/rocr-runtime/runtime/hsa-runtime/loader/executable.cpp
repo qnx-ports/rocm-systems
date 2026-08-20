@@ -45,6 +45,9 @@
 #if defined(__linux__)
 #include <link.h>
 #include <unistd.h>
+#elif defined(__QNXNTO__)
+#include <sys/link.h>
+#include <unistd.h>
 #else
 #include <cstdint>
 #endif
@@ -92,7 +95,7 @@ static __forceinline link_map*& r_debug_tail() {
 namespace rocr {
   // Having a side effect prevents call site optimization that allows removal of a noinline function call
   // with no side effect.
-#if defined(__linux__)
+#if defined(__linux__) || defined(__QNXNTO__)
   __attribute__((noinline)) 
 #else
   __declspec(noinline)
@@ -184,7 +187,11 @@ void Loader::Destroy(Loader *loader)
 {
   // Loader resets the link_map, but the executables and loaded code objects are not deleted.
   _amdgpu_r_debug.r_map = nullptr;
+#if defined(__QNXNTO__)
+  _amdgpu_r_debug.r_state = RT_CONSISTENT;
+#else
   _amdgpu_r_debug.r_state = r_debug::RT_CONSISTENT;
+#endif
   r_debug_tail() = nullptr;
   delete loader;
 }
@@ -250,14 +257,26 @@ hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const ch
 
   // Assuming runtime atomic implements C++ std::memory_order
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
-  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_ADD, std::memory_order_relaxed);
+  atomic::Store(&_amdgpu_r_debug.r_state,
+#if defined(__QNXNTO__)
+                RT_ADD,
+#else
+                r_debug::RT_ADD,
+#endif
+                std::memory_order_relaxed);
   atomic::Fence(std::memory_order_acq_rel);
   _loader_debug_state();
   atomic::Fence(std::memory_order_acq_rel);
   for (auto &lco : reinterpret_cast<ExecutableImpl*>(executable)->loaded_code_objects) {
     AddCodeObjectInfoIntoDebugMap(&(lco->r_debug_info));
   }
-  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_CONSISTENT, std::memory_order_release);
+  atomic::Store(&_amdgpu_r_debug.r_state,
+#if defined(__QNXNTO__)
+                RT_CONSISTENT,
+#else
+                r_debug::RT_CONSISTENT,
+#endif
+                std::memory_order_release);
   _loader_debug_state();
 
   return HSA_STATUS_SUCCESS;
@@ -266,14 +285,26 @@ hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const ch
 void AmdHsaCodeLoader::DestroyExecutable(Executable *executable) {
   // Assuming runtime atomic implements C++ std::memory_order
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
-  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_DELETE, std::memory_order_relaxed);
+  atomic::Store(&_amdgpu_r_debug.r_state,
+#if defined(__QNXNTO__)
+                RT_DELETE,
+#else
+                r_debug::RT_DELETE,
+#endif
+                std::memory_order_relaxed);
   atomic::Fence(std::memory_order_acq_rel);
   _loader_debug_state();
   atomic::Fence(std::memory_order_acq_rel);
   for (auto &lco : reinterpret_cast<ExecutableImpl*>(executable)->loaded_code_objects) {
     RemoveCodeObjectInfoFromDebugMap(&(lco->r_debug_info));
   }
-  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_CONSISTENT, std::memory_order_release);
+  atomic::Store(&_amdgpu_r_debug.r_state,
+#if defined(__QNXNTO__)
+                RT_CONSISTENT,
+#else
+                r_debug::RT_CONSISTENT,
+#endif
+                std::memory_order_release);
   _loader_debug_state();
 
   executables[((ExecutableImpl*)executable)->id()] = nullptr;

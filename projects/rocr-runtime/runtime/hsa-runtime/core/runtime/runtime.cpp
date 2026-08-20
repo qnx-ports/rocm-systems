@@ -48,8 +48,13 @@
 #include <string>
 #include <vector>
 #include <list>
-#if defined(__linux__)
+#if defined(__linux__) || defined(__QNXNTO__)
+#ifdef __QNXNTO__
+#include <sys/link.h>
+#include <sys/time.h>
+#else
 #include <link.h>
+#endif
 #include <dlfcn.h>
 #include <amdgpu_drm.h>
 #include <sys/mman.h>
@@ -103,7 +108,7 @@
 ROCPROFILER_REGISTER_DEFINE_IMPORT(hsa, ROCP_REG_VERSION)
 #endif
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__QNXNTO__)
 const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 #else
 #include "loader/executable.hpp"
@@ -2363,7 +2368,11 @@ Runtime::Runtime()
                      nullptr,
                      reinterpret_cast<uintptr_t>(
                                 &_loader_debug_state),
+#ifdef __QNXNTO__
+                     RT_CONSISTENT,
+#else
                      r_debug::RT_CONSISTENT,
+#endif
                      0};
   log_file = stderr;
 }
@@ -3796,7 +3805,7 @@ Runtime::MappedHandleAllowedAgent::~MappedHandleAllowedAgent() {
 
 hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permission_t perms) {
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
-  #if defined(__linux__)
+#if defined(__linux__)
     if (core::Runtime::runtime_singleton_->thunkLoader()->IsDXG()) {
       // CPU cannot access GPU VRAM on WSL due to platform restrictions
       return HSA_STATUS_ERROR;
@@ -3806,14 +3815,15 @@ hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permissi
             reinterpret_cast<uint64_t>(mappedHandle->drm_cpu_addr));
     if (mapped_ptr != va)
       return HSA_STATUS_ERROR;
+#else
+    assert(!"Unimplemented!");
+    return HSA_STATUS_ERROR;
+#endif
   } else {
     hsa_status_t status = targetAgent->driver().Map(
         shareable_handle, va, mappedHandle->offset, size, perms);
     if (status != HSA_STATUS_SUCCESS)
       return status;
-#else
-    assert(!"Unimplemented!");
-#endif
   }
   permissions = perms;
   return HSA_STATUS_SUCCESS;
